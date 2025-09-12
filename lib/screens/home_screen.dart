@@ -6,6 +6,7 @@ import '../widgets/progress_indicator.dart';
 import '../screens/add_task_screen.dart';
 import '../screens/edit_task_screen.dart';
 import '../models/task.dart';
+import '../screens/notification_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -59,6 +60,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 actions: [
+                  // Notifications settings button - always show
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    tooltip: 'Notification Settings',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const NotificationSettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  // Filter menu - only show if there are tasks
                   if (hasAnyTasks)
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.filter_list),

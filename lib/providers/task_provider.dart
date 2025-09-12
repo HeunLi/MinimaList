@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/task.dart';
 import '../services/database_service.dart';
+import '../services/notification_service.dart';
 
 class TaskProvider extends ChangeNotifier {
   List<Task> _tasks = [];
@@ -72,12 +73,36 @@ class TaskProvider extends ChangeNotifier {
 
     try {
       _tasks = await DatabaseService.getAllTasks();
+
+      // Schedule notifications for existing tasks with due dates
+      await _scheduleNotificationsForExistingTasks();
     } catch (e) {
       debugPrint('Error loading tasks: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // Schedule notifications for all existing tasks that have due dates
+  Future<void> _scheduleNotificationsForExistingTasks() async {
+    for (final task in _tasks) {
+      if (task.dueDate != null && !task.isCompleted) {
+        await NotificationService.scheduleTaskNotifications(task);
+      }
+    }
+  }
+
+  // Method to manually reschedule all notifications (useful for debugging)
+  Future<void> rescheduleAllNotifications() async {
+    for (final task in _tasks) {
+      await NotificationService.cancelTaskNotifications(task.id);
+      if (task.dueDate != null && !task.isCompleted) {
+        await NotificationService.scheduleTaskNotifications(task);
+      }
+    }
+    debugPrint(
+        'Rescheduled notifications for ${_tasks.where((t) => t.dueDate != null && !t.isCompleted).length} tasks');
   }
 
   Future<void> addTask({
@@ -131,6 +156,7 @@ class TaskProvider extends ChangeNotifier {
   Future<void> deleteTask(String taskId) async {
     try {
       await DatabaseService.deleteTask(taskId);
+      await NotificationService.cancelTaskNotifications(taskId);
       _tasks.removeWhere((task) => task.id == taskId);
       notifyListeners();
     } catch (e) {

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
 import '../providers/task_provider.dart';
+import '../screens/edit_task_screen.dart';
 
 class TaskItem extends StatelessWidget {
   final Task task;
@@ -22,13 +23,6 @@ class TaskItem extends StatelessWidget {
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
           children: [
-            SlidableAction(
-              onPressed: (context) => _editTask(context),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              icon: Icons.edit,
-              label: 'Edit',
-            ),
             SlidableAction(
               onPressed: (context) => _deleteTask(context),
               backgroundColor: Theme.of(context).colorScheme.error,
@@ -52,20 +46,24 @@ class TaskItem extends StatelessWidget {
               width: 1,
             ),
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => _toggleCompletion(context),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Checkbox
-                  _buildCheckbox(context),
-                  const SizedBox(width: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Checkbox
+                GestureDetector(
+                  onTap: () => _toggleCompletion(context),
+                  child: _buildCheckbox(context),
+                ),
+                const SizedBox(width: 12),
 
-                  // Task Content
-                  Expanded(
+                // Task Content - Tappable area for editing
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _editTask(context),
+                    behavior: HitTestBehavior
+                        .opaque, // This makes the entire area tappable
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -197,8 +195,8 @@ class TaskItem extends StatelessWidget {
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -299,11 +297,19 @@ class TaskItem extends StatelessWidget {
     context.read<TaskProvider>().toggleTaskCompletion(task.id);
   }
 
-  void _editTask(BuildContext context) {
-    // TODO: Navigate to edit task screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Edit functionality coming soon!')),
+  void _editTask(BuildContext context) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => EditTaskScreen(task: task),
+      ),
     );
+
+    if (result == true) {
+      // Task was updated, refresh if needed
+      if (context.mounted) {
+        context.read<TaskProvider>().loadTasks();
+      }
+    }
   }
 
   void _deleteTask(BuildContext context) {

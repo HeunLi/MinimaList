@@ -4,6 +4,7 @@ import '../providers/task_provider.dart';
 import '../widgets/task_item.dart';
 import '../widgets/progress_indicator.dart';
 import '../screens/add_task_screen.dart';
+import '../screens/edit_task_screen.dart';
 import '../models/task.dart';
 
 class HomeScreen extends StatefulWidget {

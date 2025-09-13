@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:minimalist/screens/edit_task_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
 import '../providers/task_provider.dart';
-import '../screens/edit_task_screen.dart';
+import '../screens/task_view_screen.dart';
 
 class TaskItem extends StatelessWidget {
   final Task task;
@@ -66,7 +67,7 @@ class TaskItem extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                task.isCompleted ? 'Undo' : 'Done!',
+                task.isCompleted ? 'Mark Incomplete' : 'Mark Complete',
                 style: TextStyle(
                   color: task.isCompleted
                       ? Theme.of(context).colorScheme.onSecondary
@@ -262,6 +263,60 @@ class TaskItem extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ],
+                          ),
+                        ],
+
+                        // Swipe hint for first few tasks or new users
+                        if (!task.isCompleted) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.swipe_right,
+                                size: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withOpacity(0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Swipe to complete',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withOpacity(0.5),
+                                      fontSize: 10,
+                                    ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.swipe_left,
+                                size: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withOpacity(0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Swipe to delete',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withOpacity(0.5),
+                                      fontSize: 10,
+                                    ),
+                              ),
                             ],
                           ),
                         ],

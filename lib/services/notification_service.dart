@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'dart:io';
 import '../models/task.dart';
 
 class NotificationService {
@@ -15,55 +16,88 @@ class NotificationService {
     if (_initialized) return;
 
     try {
-      // Initialize timezone data
       tz.initializeTimeZones();
 
-      const AndroidInitializationSettings initializationSettingsAndroid =
+      const AndroidInitializationSettings androidSettings =
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
-      const DarwinInitializationSettings initializationSettingsIOS =
+      const DarwinInitializationSettings iosSettings =
           DarwinInitializationSettings(
         requestSoundPermission: true,
         requestBadgePermission: true,
         requestAlertPermission: true,
       );
 
-      const InitializationSettings initializationSettings =
-          InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsIOS,
+      const InitializationSettings initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
       );
 
       await _notifications.initialize(
-        initializationSettings,
+        initSettings,
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
+      await _createNotificationChannels();
       _initialized = true;
-      debugPrint('NotificationService initialized successfully');
     } catch (e) {
-      debugPrint('Error initializing NotificationService: $e');
       _initialized = false;
     }
   }
 
   // Handle notification tap
   static void _onNotificationTapped(NotificationResponse details) {
-    debugPrint('Notification tapped: ${details.payload}');
     // TODO: Navigate to specific task or home screen
   }
 
-  // Request notification permission
+  // Create notification channels
+  static Future<void> _createNotificationChannels() async {
+    if (!Platform.isAndroid) return;
+
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin == null) return;
+
+    const highPriorityChannel = AndroidNotificationChannel(
+      'task_reminders',
+      'Task Reminders',
+      description: 'Notifications for task due dates',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+      showBadge: true,
+    );
+
+    const dailyChannel = AndroidNotificationChannel(
+      'daily_summary',
+      'Daily Summary',
+      description: 'Daily task summary notifications',
+      importance: Importance.defaultImportance,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    await androidPlugin.createNotificationChannel(highPriorityChannel);
+    await androidPlugin.createNotificationChannel(dailyChannel);
+  }
+
+  // Request notification permissions
   static Future<bool> requestPermission() async {
     try {
-      if (await Permission.notification.isGranted) {
-        return true;
+      // Request notification permission
+      final status = await Permission.notification.request();
+
+      if (status.isGranted && Platform.isAndroid) {
+        // Try to request exact alarm permission for scheduled notifications
+        await Permission.scheduleExactAlarm.request();
+        // Try to request battery optimization exemption
+        await Permission.ignoreBatteryOptimizations.request();
       }
 
-      final status = await Permission.notification.request();
-      return status == PermissionStatus.granted;
+      return status.isGranted;
     } catch (e) {
-      debugPrint('Error requesting notification permission: $e');
       return false;
     }
   }
@@ -73,302 +107,244 @@ class NotificationService {
     try {
       return await Permission.notification.isGranted;
     } catch (e) {
-      debugPrint('Error checking notification permission: $e');
       return false;
     }
   }
 
   // Schedule notifications for a task
   static Future<void> scheduleTaskNotifications(Task task) async {
-    try {
-      if (!_initialized) await initialize();
-      if (task.dueDate == null) {
-        debugPrint('No due date for task: ${task.title}');
-        return;
-      }
+    if (!_initialized) await initialize();
 
-      // Check if notifications are enabled
-      if (!(await areNotificationsEnabled())) {
-        debugPrint(
-            'Notifications not enabled, skipping scheduling for task: ${task.title}');
-        return;
-      }
+    if (task.dueDate == null) return;
 
-      // Cancel existing notifications for this task
-      await cancelTaskNotifications(task.id);
+    // Check if notifications are enabled
+    final notificationsEnabled = await areNotificationsEnabled();
+    if (!notificationsEnabled) return;
 
-      final now = DateTime.now();
-      final dueDate = task.dueDate!;
+    // Cancel existing notifications for this task
+    await cancelTaskNotifications(task.id);
 
-      debugPrint(
-          'Scheduling notifications for task: ${task.title}, due: $dueDate');
+    final now = DateTime.now();
+    final dueDate = task.dueDate!;
 
-      // Don't schedule notifications for past due dates
-      if (dueDate.isBefore(now)) {
-        debugPrint('Due date is in the past, not scheduling: ${task.title}');
-        return;
-      }
+    // Don't schedule notifications for past due dates
+    if (dueDate.isBefore(now)) return;
 
-      int notificationsScheduled = 0;
+    // Schedule notification 1 day before (if applicable)
+    final oneDayBefore = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day - 1,
+      9, // 9 AM
+    );
 
-      // Schedule notification 1 day before (if due date is more than 1 day away)
-      final oneDayBefore = DateTime(
-        dueDate.year,
-        dueDate.month,
-        dueDate.day - 1,
-        9, // 9 AM
-      );
-
-      if (oneDayBefore.isAfter(now)) {
-        await _scheduleNotification(
-          id: _getDayBeforeNotificationId(task.id),
-          title: 'Task Due Tomorrow',
-          body: task.title,
-          scheduledDate: oneDayBefore,
-          payload: 'task_reminder_${task.id}',
-        );
-        notificationsScheduled++;
-        debugPrint('Scheduled day-before notification for: ${task.title}');
-      }
-
-      // Schedule notification on due date (morning - 9 AM)
-      final dueDateMorning = DateTime(
-        dueDate.year,
-        dueDate.month,
-        dueDate.day,
-        9, // 9 AM
-      );
-
-      if (dueDateMorning.isAfter(now)) {
-        await _scheduleNotification(
-          id: _getDueDateNotificationId(task.id),
-          title: 'Task Due Today',
-          body: task.title,
-          scheduledDate: dueDateMorning,
-          payload: 'task_due_${task.id}',
-        );
-        notificationsScheduled++;
-        debugPrint('Scheduled due-date notification for: ${task.title}');
-      }
-
-      // Schedule overdue notification (day after due date - 10 AM)
-      final overdueDate = DateTime(
-        dueDate.year,
-        dueDate.month,
-        dueDate.day + 1,
-        10, // 10 AM
-      );
-
+    if (oneDayBefore.isAfter(now)) {
       await _scheduleNotification(
-        id: _getOverdueNotificationId(task.id),
-        title: 'Task Overdue',
-        body: '${task.title} was due yesterday',
-        scheduledDate: overdueDate,
-        payload: 'task_overdue_${task.id}',
+        id: _getDayBeforeNotificationId(task.id),
+        title: 'Task Due Tomorrow',
+        body: task.title,
+        scheduledDate: oneDayBefore,
       );
-      notificationsScheduled++;
-      debugPrint('Scheduled overdue notification for: ${task.title}');
-
-      debugPrint(
-          'Total notifications scheduled for ${task.title}: $notificationsScheduled');
-    } catch (e) {
-      debugPrint('Error scheduling notifications for task ${task.title}: $e');
     }
+
+    // Schedule notification on due date morning
+    final dueDateMorning = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day,
+      9, // 9 AM
+    );
+
+    if (dueDateMorning.isAfter(now)) {
+      await _scheduleNotification(
+        id: _getDueDateNotificationId(task.id),
+        title: 'Task Due Today',
+        body: task.title,
+        scheduledDate: dueDateMorning,
+      );
+    }
+
+    // Schedule overdue notification
+    final overdueDate = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day + 1,
+      10, // 10 AM
+    );
+
+    await _scheduleNotification(
+      id: _getOverdueNotificationId(task.id),
+      title: 'Task Overdue',
+      body: '${task.title} was due yesterday',
+      scheduledDate: overdueDate,
+    );
   }
 
-  // Cancel all notifications for a task
-  static Future<void> cancelTaskNotifications(String taskId) async {
-    try {
-      if (!_initialized) await initialize();
-
-      await _notifications.cancel(_getDayBeforeNotificationId(taskId));
-      await _notifications.cancel(_getDueDateNotificationId(taskId));
-      await _notifications.cancel(_getOverdueNotificationId(taskId));
-
-      debugPrint('Cancelled notifications for task: $taskId');
-    } catch (e) {
-      debugPrint('Error cancelling notifications for task $taskId: $e');
-    }
-  }
-
-  // Schedule a notification using inexact scheduling (Android 12+ friendly)
+  // Core scheduling method
   static Future<void> _scheduleNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledDate,
-    String? payload,
   }) async {
     try {
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
+      const androidDetails = AndroidNotificationDetails(
         'task_reminders',
         'Task Reminders',
-        channelDescription: 'Notifications for task due dates and reminders',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
+        channelDescription: 'Notifications for task due dates',
+        importance: Importance.max,
+        priority: Priority.max,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.reminder,
+        enableVibration: true,
+        playSound: true,
       );
 
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        categoryIdentifier: 'task_reminder',
-        interruptionLevel: InterruptionLevel.active,
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
       );
 
-      const NotificationDetails notificationDetails = NotificationDetails(
+      const details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
 
-      // Convert to timezone-aware datetime
-      final tz.TZDateTime scheduledTZ =
-          tz.TZDateTime.from(scheduledDate, tz.local);
+      final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
 
-      // Use inexact scheduling to avoid "exact alarms not permitted" error
+      // Try exact scheduling first, fall back to inexact if needed
+      AndroidScheduleMode scheduleMode =
+          AndroidScheduleMode.inexactAllowWhileIdle;
+
+      if (Platform.isAndroid) {
+        final exactAlarmGranted = await Permission.scheduleExactAlarm.isGranted;
+        if (exactAlarmGranted) {
+          scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
+        }
+      }
+
       await _notifications.zonedSchedule(
         id,
         title,
         body,
-        scheduledTZ,
-        notificationDetails,
-        payload: payload,
+        tzScheduledDate,
+        details,
+        androidScheduleMode: scheduleMode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        androidScheduleMode: AndroidScheduleMode
-            .inexactAllowWhileIdle, // This fixes the Android 12+ issue
       );
-
-      debugPrint(
-          'Successfully scheduled notification: $title for ${scheduledDate.toString()}');
     } catch (e) {
-      debugPrint('Error scheduling single notification: $e');
+      // Silently fail - notification might not be scheduled
     }
   }
 
-  // Show immediate notification (for testing or instant feedback)
+  // Show immediate notification
   static Future<void> showInstantNotification({
     required String title,
     required String body,
-    String? payload,
   }) async {
-    try {
-      if (!_initialized) await initialize();
+    if (!_initialized) await initialize();
 
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'instant_notifications',
-        'Instant Notifications',
-        channelDescription: 'Immediate notifications for user actions',
-        importance: Importance.high,
-        priority: Priority.high,
-      );
+    const androidDetails = AndroidNotificationDetails(
+      'instant_notifications',
+      'Instant Notifications',
+      channelDescription: 'Immediate notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
 
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const iosDetails = DarwinNotificationDetails();
 
-      const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
-      await _notifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        notificationDetails,
-        payload: payload,
-      );
-
-      debugPrint('Showed instant notification: $title');
-    } catch (e) {
-      debugPrint('Error showing instant notification: $e');
-    }
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      details,
+    );
   }
 
-  // Schedule daily summary notification
+  // Schedule daily summary
   static Future<void> scheduleDailySummary() async {
-    try {
-      if (!_initialized) await initialize();
+    if (!_initialized) await initialize();
 
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'daily_summary',
-        'Daily Summary',
-        channelDescription: 'Daily task summary notifications',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-      );
+    const androidDetails = AndroidNotificationDetails(
+      'daily_summary',
+      'Daily Summary',
+      channelDescription: 'Daily task summary',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    );
 
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const iosDetails = DarwinNotificationDetails();
 
-      const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
-      // Schedule for 8 AM daily
-      final now = DateTime.now();
-      final scheduledDate = DateTime(now.year, now.month, now.day, 8);
-      final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
+    final now = DateTime.now();
+    var scheduledDate = DateTime(now.year, now.month, now.day, 8);
 
-      await _notifications.zonedSchedule(
-        999999, // Unique ID for daily summary
-        'Good Morning!',
-        'Check your tasks for today',
-        scheduledTZ,
-        notificationDetails,
-        payload: 'daily_summary',
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        androidScheduleMode: AndroidScheduleMode
-            .inexactAllowWhileIdle, // Fixed: Use inexact scheduling
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
-
-      debugPrint('Scheduled daily summary notification');
-    } catch (e) {
-      debugPrint('Error scheduling daily summary: $e');
+    // If 8 AM has passed today, schedule for tomorrow
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
+
+    final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
+
+    await _notifications.zonedSchedule(
+      999999, // Unique ID for daily summary
+      'Good Morning!',
+      'Check your tasks for today',
+      scheduledTZ,
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
   }
 
   // Cancel daily summary
   static Future<void> cancelDailySummary() async {
-    try {
-      if (!_initialized) await initialize();
-      await _notifications.cancel(999999);
-      debugPrint('Cancelled daily summary notification');
-    } catch (e) {
-      debugPrint('Error cancelling daily summary: $e');
-    }
+    if (!_initialized) await initialize();
+    await _notifications.cancel(999999);
   }
 
-  // Get all pending notifications (for debugging)
-  static Future<List<PendingNotificationRequest>>
-      getPendingNotifications() async {
-    try {
-      if (!_initialized) await initialize();
-      final pending = await _notifications.pendingNotificationRequests();
-      debugPrint('Found ${pending.length} pending notifications');
-      return pending;
-    } catch (e) {
-      debugPrint('Error getting pending notifications: $e');
-      return [];
-    }
+  // Cancel notifications for a task
+  static Future<void> cancelTaskNotifications(String taskId) async {
+    if (!_initialized) await initialize();
+
+    await _notifications.cancel(_getDayBeforeNotificationId(taskId));
+    await _notifications.cancel(_getDueDateNotificationId(taskId));
+    await _notifications.cancel(_getOverdueNotificationId(taskId));
   }
 
   // Cancel all notifications
   static Future<void> cancelAllNotifications() async {
-    try {
-      if (!_initialized) await initialize();
-      await _notifications.cancelAll();
-      debugPrint('Cancelled all notifications');
-    } catch (e) {
-      debugPrint('Error cancelling all notifications: $e');
-    }
+    if (!_initialized) await initialize();
+    await _notifications.cancelAll();
+  }
+
+  // Get pending notifications (for debugging)
+  static Future<List<PendingNotificationRequest>>
+      getPendingNotifications() async {
+    if (!_initialized) await initialize();
+
+    final pending = await _notifications.pendingNotificationRequests();
+    debugPrint('Pending notifications: ${pending.length}');
+    return pending;
   }
 
   // Helper methods to generate unique notification IDs
   static int _getDayBeforeNotificationId(String taskId) {
-    return (taskId.hashCode.abs() % 100000); // Ensure positive int
+    return (taskId.hashCode.abs() % 100000);
   }
 
   static int _getDueDateNotificationId(String taskId) {

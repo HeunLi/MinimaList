@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
@@ -15,59 +17,168 @@ class _NotificationSettingsScreenState
   bool _dailySummaryEnabled = false;
   bool _isLoading = true;
 
+  // Keys for SharedPreferences
+  static const String _notificationsEnabledKey = 'notifications_enabled';
+  static const String _dailySummaryEnabledKey = 'daily_summary_enabled';
+
   @override
   void initState() {
     super.initState();
-    _checkNotificationStatus();
+    _loadNotificationSettings();
   }
 
-  Future<void> _checkNotificationStatus() async {
-    final enabled = await NotificationService.areNotificationsEnabled();
-    setState(() {
-      _notificationsEnabled = enabled;
-      _dailySummaryEnabled =
-          enabled; // For now, assume daily summary follows main setting
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _requestNotificationPermission() async {
+  Future<void> _loadNotificationSettings() async {
     setState(() => _isLoading = true);
 
-    final granted = await NotificationService.requestPermission();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final systemPermissionGranted =
+          await NotificationService.areNotificationsEnabled();
 
-    if (granted) {
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Notifications enabled! You\'ll now receive reminders for your tasks.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+      // Check both system permission AND user preference
+      final userEnabledNotifications =
+          prefs.getBool(_notificationsEnabledKey) ?? false;
+      final userEnabledDailySummary =
+          prefs.getBool(_dailySummaryEnabledKey) ?? false;
 
-        // Show test notification
-        await NotificationService.showInstantNotification(
-          title: 'MinimaList Notifications',
-          body: 'You\'re all set! This is what task reminders will look like.',
-        );
-      }
-    } else {
-      // Show error message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Notification permission denied. You can enable it in Settings.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      setState(() {
+        // Notifications are truly enabled only if BOTH system permission is granted AND user preference is true
+        _notificationsEnabled =
+            systemPermissionGranted && userEnabledNotifications;
+        _dailySummaryEnabled = _notificationsEnabled && userEnabledDailySummary;
+      });
+    } catch (e) {
+      debugPrint('Error loading notification settings: $e');
+      setState(() {
+        _notificationsEnabled = false;
+        _dailySummaryEnabled = false;
+      });
+    } finally {
+      setState(() => _isLoading = false);
     }
+  }
 
-    await _checkNotificationStatus();
+  Future<void> _saveNotificationSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_notificationsEnabledKey, _notificationsEnabled);
+      await prefs.setBool(_dailySummaryEnabledKey, _dailySummaryEnabled);
+    } catch (e) {
+      debugPrint('Error saving notification settings: $e');
+    }
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    setState(() => _isLoading = true);
+
+    try {
+      if (value) {
+        // User wants to ENABLE notifications
+        final systemPermissionGranted =
+            await NotificationService.requestPermission();
+
+        if (systemPermissionGranted) {
+          setState(() => _notificationsEnabled = true);
+          await _saveNotificationSettings();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Notifications enabled! You\'ll receive task reminders.'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            await NotificationService.showInstantNotification(
+              title: 'Notifications Enabled',
+              body: 'You\'ll receive reminders for your tasks.',
+            );
+          }
+        } else {
+          setState(() => _notificationsEnabled = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please enable notifications in Settings.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        // User wants to DISABLE notifications
+        setState(() {
+          _notificationsEnabled = false;
+          _dailySummaryEnabled = false; // Also disable daily summary
+        });
+
+        await _saveNotificationSettings();
+        await NotificationService.cancelAllNotifications();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notifications disabled'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error toggling notifications: $e');
+      // Revert state on error
+      setState(() => _notificationsEnabled = !value);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleDailySummary(bool value) async {
+    if (!_notificationsEnabled)
+      return; // Can't enable if main notifications are off
+
+    setState(() => _dailySummaryEnabled = value);
+    await _saveNotificationSettings();
+
+    try {
+      if (value) {
+        await NotificationService.scheduleDailySummary();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Daily summary enabled'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        await NotificationService.cancelDailySummary();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Daily summary disabled'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error toggling daily summary: $e');
+      // Revert on error
+      setState(() => _dailySummaryEnabled = !value);
+      await _saveNotificationSettings();
+    }
   }
 
   @override
@@ -115,22 +226,15 @@ class _NotificationSettingsScreenState
                       ),
                       Switch(
                         value: _notificationsEnabled,
-                        onChanged: (value) async {
-                          if (value) {
-                            await _requestNotificationPermission();
-                          } else {
-                            await NotificationService.cancelAllNotifications();
-                            await _checkNotificationStatus();
-                          }
-                        },
+                        onChanged: _isLoading ? null : _toggleNotifications,
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _notificationsEnabled
-                        ? 'Receive notifications for task due dates and reminders'
-                        : 'Enable notifications to get reminders for your tasks',
+                        ? 'Receive notifications for task due dates'
+                        : 'Enable notifications to get reminders',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -138,7 +242,8 @@ class _NotificationSettingsScreenState
                   if (!_notificationsEnabled) ...[
                     const SizedBox(height: 12),
                     FilledButton.icon(
-                      onPressed: _requestNotificationPermission,
+                      onPressed:
+                          _isLoading ? null : () => _toggleNotifications(true),
                       icon: const Icon(Icons.notifications),
                       label: const Text('Enable Notifications'),
                     ),
@@ -150,7 +255,7 @@ class _NotificationSettingsScreenState
 
           const SizedBox(height: 16),
 
-          // Notification types (only show if notifications are enabled)
+          // Notification types (only show if enabled)
           if (_notificationsEnabled) ...[
             Text(
               'Notification Types',
@@ -160,7 +265,7 @@ class _NotificationSettingsScreenState
             ),
             const SizedBox(height: 8),
 
-            // Due date reminders
+            // Due date reminders (always enabled when notifications are on)
             Card(
               child: ListTile(
                 leading: Icon(
@@ -168,8 +273,7 @@ class _NotificationSettingsScreenState
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 title: const Text('Due Date Reminders'),
-                subtitle:
-                    const Text('Get notified 1 day before and on the due date'),
+                subtitle: const Text('Notified 1 day before and on due date'),
                 trailing: Icon(
                   Icons.check_circle,
                   color: Theme.of(context).colorScheme.primary,
@@ -179,7 +283,7 @@ class _NotificationSettingsScreenState
 
             const SizedBox(height: 8),
 
-            // Overdue notifications
+            // Overdue notifications (always enabled when notifications are on)
             Card(
               child: ListTile(
                 leading: Icon(
@@ -187,7 +291,7 @@ class _NotificationSettingsScreenState
                   color: Theme.of(context).colorScheme.error,
                 ),
                 title: const Text('Overdue Notifications'),
-                subtitle: const Text('Get notified when tasks become overdue'),
+                subtitle: const Text('Notified when tasks become overdue'),
                 trailing: Icon(
                   Icons.check_circle,
                   color: Theme.of(context).colorScheme.primary,
@@ -205,34 +309,10 @@ class _NotificationSettingsScreenState
                   color: Theme.of(context).colorScheme.tertiary,
                 ),
                 title: const Text('Daily Summary'),
-                subtitle:
-                    const Text('Morning overview of today\'s tasks (8 AM)'),
+                subtitle: const Text('Morning overview at 8 AM'),
                 trailing: Switch(
                   value: _dailySummaryEnabled,
-                  onChanged: (value) async {
-                    setState(() => _dailySummaryEnabled = value);
-                    if (value) {
-                      await NotificationService.scheduleDailySummary();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Daily summary enabled for 8 AM'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    } else {
-                      await NotificationService.cancelDailySummary();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Daily summary disabled'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onChanged: _toggleDailySummary,
                 ),
               ),
             ),
@@ -258,7 +338,7 @@ class _NotificationSettingsScreenState
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Send a test notification to make sure everything is working',
+                      'Send a test notification',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -288,84 +368,118 @@ class _NotificationSettingsScreenState
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // Debug info
             Card(
-              color: Theme.of(context).colorScheme.surfaceVariant,
-              child: ExpansionTile(
-                title: Text(
-                  'Debug Info',
-                  style: Theme.of(context).textTheme.titleSmall,
+              child: ListTile(
+                leading: Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () async {
-                            final pending = await NotificationService
-                                .getPendingNotifications();
-                            if (mounted) {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Pending Notifications'),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                          '${pending.length} scheduled notifications'),
-                                      const SizedBox(height: 8),
-                                      if (pending.isNotEmpty) ...[
-                                        const Text('Scheduled notifications:'),
-                                        const SizedBox(height: 8),
-                                        ...pending.take(5).map((notif) => Text(
-                                              '• ${notif.title} (ID: ${notif.id})',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            )),
-                                        if (pending.length > 5)
+                title: const Text('Scheduled Notifications'),
+                subtitle: const Text('View pending reminders'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () async {
+                  final pending =
+                      await NotificationService.getPendingNotifications();
+                  if (mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Scheduled Notifications'),
+                        content: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${pending.length} notifications scheduled'),
+                              const SizedBox(height: 8),
+                              Text(
+                                  'Notifications enabled: $_notificationsEnabled'),
+                              Text(
+                                  'Daily summary enabled: $_dailySummaryEnabled'),
+                              if (pending.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                ...pending.take(10).map((notif) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
                                           Text(
-                                              '... and ${pending.length - 5} more'),
-                                      ],
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text('Show Pending Notifications'),
+                                            notif.title ?? 'No title',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                          Text(
+                                            notif.body ?? 'No body',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                                if (pending.length > 10)
+                                  Text('... and ${pending.length - 10} more'),
+                              ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: () async {
-                            await NotificationService.cancelAllNotifications();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('All notifications cancelled')),
-                              );
-                            }
-                          },
-                          child: const Text('Cancel All Notifications'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Settings help
+            Card(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.help_outline,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Troubleshooting',
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'If notifications aren\'t working:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('• Enable app notifications in Settings'),
+                    const Text('• Disable battery optimization for this app'),
+                    const Text('• Allow exact alarms (Android 12+)'),
+                    const Text('• For Huawei: Enable Auto-launch'),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => openAppSettings(),
+                      child: const Text('Open App Settings'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

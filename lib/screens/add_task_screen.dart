@@ -150,7 +150,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                         ),
                         ButtonSegment(
                           value: TaskPriority.medium,
-                          label: Text('Medium'),
+                          label: Text('Med'),
                           icon: Icon(Icons.remove),
                         ),
                         ButtonSegment(

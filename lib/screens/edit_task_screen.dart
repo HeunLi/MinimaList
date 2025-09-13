@@ -263,7 +263,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                           ),
                           ButtonSegment(
                             value: TaskPriority.medium,
-                            label: Text('Medium'),
+                            label: Text('Med'),
                             icon: Icon(Icons.remove),
                           ),
                           ButtonSegment(

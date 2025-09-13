@@ -4,8 +4,8 @@ import '../providers/task_provider.dart';
 import '../widgets/task_item.dart';
 import '../widgets/progress_indicator.dart';
 import '../screens/add_task_screen.dart';
-import '../models/task.dart';
 import '../screens/notification_settings_screen.dart';
+import '../models/task.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,13 +14,26 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   bool _showCompleted = true;
+  bool _isSearching = false;
+  late AnimationController _searchAnimationController;
+  late Animation<double> _searchAnimation;
+  String _currentSearchValue = '';
 
   @override
   void initState() {
     super.initState();
+    _searchAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _searchAnimation = CurvedAnimation(
+      parent: _searchAnimationController,
+      curve: Curves.easeInOut,
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TaskProvider>().loadTasks();
     });
@@ -29,370 +42,493 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchAnimationController.dispose();
     super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+    });
+
+    if (_isSearching) {
+      // Restore the search value when opening
+      _searchController.text = _currentSearchValue;
+      _searchAnimationController.forward();
+    } else {
+      // Save the current search value before closing
+      _currentSearchValue = _searchController.text;
+      _searchAnimationController.reverse();
+    }
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _currentSearchValue = '';
+      _searchController.clear();
+    });
+    context.read<TaskProvider>().setSearchQuery(null);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer<TaskProvider>(
-        builder: (context, taskProvider, child) {
-          if (taskProvider.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+      body: Stack(
+        children: [
+          // Main content
+          Consumer<TaskProvider>(
+            builder: (context, taskProvider, child) {
+              if (taskProvider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          // Use all tasks for checking if we have any tasks in the database
-          final hasAnyTasksInDatabase = taskProvider.allTasks.isNotEmpty;
+              final hasAnyTasksInDatabase = taskProvider.allTasks.isNotEmpty;
+              final incompleteTasks = taskProvider.incompleteTasks;
+              final completedTasks = taskProvider.completedTasks;
+              final hasFilteredTasks =
+                  incompleteTasks.isNotEmpty || completedTasks.isNotEmpty;
 
-          // Use filtered tasks for display
-          final incompleteTasks = taskProvider.incompleteTasks;
-          final completedTasks = taskProvider.completedTasks;
-          final hasFilteredTasks =
-              incompleteTasks.isNotEmpty || completedTasks.isNotEmpty;
-
-          return CustomScrollView(
-            slivers: [
-              // App Bar
-              SliverAppBar.large(
-                title: const Text(
-                  'MinimaList',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                actions: [
-                  // Notifications settings button - always show
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined),
-                    tooltip: 'Notification Settings',
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const NotificationSettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  // Filter menu - only show if there are tasks in database
-                  if (hasAnyTasksInDatabase)
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.filter_list),
-                      onSelected: (value) =>
-                          _handleFilterSelection(value, taskProvider),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'all',
-                          child: Text('All Tasks'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'high',
-                          child: Text('High Priority'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'medium',
-                          child: Text('Medium Priority'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'low',
-                          child: Text('Low Priority'),
-                        ),
-                        const PopupMenuDivider(),
-                        const PopupMenuItem(
-                          value: 'clear',
-                          child: Text('Clear Filters'),
-                        ),
-                      ],
+              return CustomScrollView(
+                slivers: [
+                  // Clean App Bar
+                  SliverAppBar.large(
+                    title: const Text(
+                      'MinimaList',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w300,
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                ],
-              ),
-
-              // Progress Indicator - show when there are filtered tasks
-              if (hasFilteredTasks)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: TaskProgressIndicator(
-                      totalTasks:
-                          incompleteTasks.length + completedTasks.length,
-                      completedTasks: completedTasks.length,
-                    ),
-                  ),
-                ),
-
-              // Search Bar - show when there are ANY tasks in database
-              if (hasAnyTasksInDatabase)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: SearchBar(
-                      controller: _searchController,
-                      hintText: 'Search tasks...',
-                      leading: const Icon(Icons.search),
-                      trailing: [
-                        if (_searchController.text.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              taskProvider.setSearchQuery(null);
-                            },
+                    actions: [
+                      // Search button - only show if there are tasks
+                      if (hasAnyTasksInDatabase)
+                        IconButton(
+                          icon: Icon(
+                            _currentSearchValue.isNotEmpty
+                                ? Icons.search
+                                : Icons.search,
+                            color: _currentSearchValue.isNotEmpty
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
                           ),
-                      ],
-                      onChanged: (query) {
-                        taskProvider
-                            .setSearchQuery(query.isEmpty ? null : query);
-                      },
-                    ),
-                  ),
-                ),
-
-              // Active Filters Display
-              if (taskProvider.filterPriority != null ||
-                  taskProvider.filterCategory != null)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Wrap(
-                      spacing: 8.0,
-                      children: [
-                        if (taskProvider.filterPriority != null)
-                          Chip(
-                            label: Text(
-                                '${taskProvider.filterPriority!.displayName} Priority'),
-                            onDeleted: () =>
-                                taskProvider.setPriorityFilter(null),
-                          ),
-                        if (taskProvider.filterCategory != null)
-                          Chip(
-                            label: Text(taskProvider.filterCategory!),
-                            onDeleted: () =>
-                                taskProvider.setCategoryFilter(null),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // Empty State - show when no tasks in database at all
-              if (!hasAnyTasksInDatabase)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.task_alt,
-                          size: 80,
-                          color: Theme.of(context).colorScheme.outline,
+                          tooltip: 'Search Tasks',
+                          onPressed: _toggleSearch,
                         ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'No tasks yet',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap the + button to add your first task',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // No Search Results State - show when search returns no results
-              if (hasAnyTasksInDatabase && !hasFilteredTasks)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off,
-                          size: 80,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'No tasks found',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          taskProvider.searchQuery != null
-                              ? 'Try a different search term'
-                              : 'Try adjusting your filters',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (taskProvider.searchQuery != null ||
-                            taskProvider.filterPriority != null ||
-                            taskProvider.filterCategory != null)
-                          TextButton.icon(
-                            onPressed: () {
-                              _searchController.clear();
-                              taskProvider.clearFilters();
-                            },
-                            icon: const Icon(Icons.clear_all),
-                            label: const Text('Clear Search & Filters'),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // Task Lists - show when there are filtered tasks
-              if (hasFilteredTasks) ...[
-                // Incomplete Tasks Section
-                if (incompleteTasks.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            'To Do',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
-                              borderRadius: BorderRadius.circular(12),
+                      // Notifications settings button
+                      IconButton(
+                        icon: const Icon(Icons.notifications_outlined),
+                        tooltip: 'Notification Settings',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const NotificationSettingsScreen(),
                             ),
-                            child: Text(
-                              '${incompleteTasks.length}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
+                          );
+                        },
+                      ),
+                      // Filter menu - only show if there are tasks
+                      if (hasAnyTasksInDatabase)
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.filter_list),
+                          onSelected: (value) =>
+                              _handleFilterSelection(value, taskProvider),
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                                value: 'all', child: Text('All Tasks')),
+                            const PopupMenuItem(
+                                value: 'high', child: Text('High Priority')),
+                            const PopupMenuItem(
+                                value: 'medium',
+                                child: Text('Medium Priority')),
+                            const PopupMenuItem(
+                                value: 'low', child: Text('Low Priority')),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(
+                                value: 'clear', child: Text('Clear Filters')),
+                          ],
+                        ),
+                    ],
+                  ),
+
+                  // Progress Indicator
+                  if (hasFilteredTasks)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: TaskProgressIndicator(
+                          totalTasks:
+                              incompleteTasks.length + completedTasks.length,
+                          completedTasks: completedTasks.length,
+                        ),
+                      ),
+                    ),
+
+                  // Active search indicator
+                  if (_currentSearchValue.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.search,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Searching for: "$_currentSearchValue"',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: _clearSearch,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Active Filters Display
+                  if (taskProvider.filterPriority != null ||
+                      taskProvider.filterCategory != null)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Wrap(
+                          spacing: 8.0,
+                          children: [
+                            if (taskProvider.filterPriority != null)
+                              Chip(
+                                label: Text(
+                                    '${taskProvider.filterPriority!.displayName} Priority'),
+                                onDeleted: () =>
+                                    taskProvider.setPriorityFilter(null),
+                              ),
+                            if (taskProvider.filterCategory != null)
+                              Chip(
+                                label: Text(taskProvider.filterCategory!),
+                                onDeleted: () =>
+                                    taskProvider.setCategoryFilter(null),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Empty States
+                  if (!hasAnyTasksInDatabase)
+                    SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.task_alt,
+                                size: 80,
+                                color: Theme.of(context).colorScheme.outline),
+                            const SizedBox(height: 24),
+                            Text('No tasks yet',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant)),
+                            const SizedBox(height: 8),
+                            Text('Tap the + button to add your first task',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline)),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  if (hasAnyTasksInDatabase && !hasFilteredTasks)
+                    SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off,
+                                size: 80,
+                                color: Theme.of(context).colorScheme.outline),
+                            const SizedBox(height: 24),
+                            Text('No tasks found',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant)),
+                            const SizedBox(height: 8),
+                            Text(
+                                _currentSearchValue.isNotEmpty
+                                    ? 'Try a different search term'
+                                    : 'Try adjusting your filters',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline)),
+                            const SizedBox(height: 16),
+                            if (_currentSearchValue.isNotEmpty ||
+                                taskProvider.filterPriority != null ||
+                                taskProvider.filterCategory != null)
+                              TextButton.icon(
+                                onPressed: () {
+                                  _clearSearch();
+                                  taskProvider.clearFilters();
+                                },
+                                icon: const Icon(Icons.clear_all),
+                                label: const Text('Clear Search & Filters'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Task Lists
+                  if (hasFilteredTasks) ...[
+                    if (incompleteTasks.isNotEmpty) ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Row(
+                            children: [
+                              Text('To Do',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
                                     color:
-                                        Theme.of(context).colorScheme.onPrimary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
+                                        Theme.of(context).colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Text('${incompleteTasks.length}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary,
+                                            fontWeight: FontWeight.w600)),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                      ),
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) =>
+                              TaskItem(task: incompleteTasks[index]),
+                          childCount: incompleteTasks.length,
+                        ),
+                      ),
+                    ],
+                    if (completedTasks.isNotEmpty) ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Row(
+                            children: [
+                              Text('Completed',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(context).colorScheme.outline,
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Text('${completedTasks.length}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onInverseSurface,
+                                            fontWeight: FontWeight.w600)),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: Icon(
+                                    _showCompleted
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    size: 20),
+                                onPressed: () {
+                                  setState(() {
+                                    _showCompleted = !_showCompleted;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_showCompleted)
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) =>
+                                TaskItem(task: completedTasks[index]),
+                            childCount: completedTasks.length,
+                          ),
+                        ),
+                    ],
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ],
+              );
+            },
+          ),
+
+          // Floating Search Overlay
+          AnimatedBuilder(
+            animation: _searchAnimation,
+            builder: (context, child) {
+              return Visibility(
+                visible: _searchAnimation.value > 0,
+                child: Stack(
+                  children: [
+                    // Dimmed background
+                    GestureDetector(
+                      onTap: _toggleSearch,
+                      child: Container(
+                        color: Colors.black
+                            .withOpacity(0.5 * _searchAnimation.value),
                       ),
                     ),
-                  ),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          TaskItem(task: incompleteTasks[index]),
-                      childCount: incompleteTasks.length,
-                    ),
-                  ),
-                ],
 
-                // Completed Tasks Section
-                if (completedTasks.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Completed',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                    // Search bar
+                    Positioned(
+                      top: MediaQuery.of(context).padding.top + 20,
+                      left: 16,
+                      right: 16,
+                      child: Transform.translate(
+                        offset: Offset(0, -50 * (1 - _searchAnimation.value)),
+                        child: Opacity(
+                          opacity: _searchAnimation.value,
+                          child: Material(
+                            elevation: 8,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outline
+                                      .withOpacity(0.2),
                                 ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.outline,
-                              borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: StatefulBuilder(
+                                builder: (context, setSearchState) {
+                                  return TextField(
+                                    controller: _searchController,
+                                    autofocus: _isSearching,
+                                    decoration: InputDecoration(
+                                      hintText: 'Search tasks...',
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                            _searchController.text.isNotEmpty
+                                                ? Icons.clear
+                                                : Icons.close),
+                                        onPressed: () {
+                                          if (_searchController
+                                              .text.isNotEmpty) {
+                                            // Clear the search text
+                                            _searchController.clear();
+                                            _currentSearchValue = '';
+                                            context
+                                                .read<TaskProvider>()
+                                                .setSearchQuery(null);
+                                            setSearchState(() {});
+                                          } else {
+                                            // Close the search overlay
+                                            _toggleSearch();
+                                          }
+                                        },
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 16),
+                                    ),
+                                    style:
+                                        Theme.of(context).textTheme.bodyLarge,
+                                    onChanged: (query) {
+                                      _currentSearchValue = query;
+                                      context
+                                          .read<TaskProvider>()
+                                          .setSearchQuery(
+                                              query.isEmpty ? null : query);
+                                      setSearchState(
+                                          () {}); // Update the clear button visibility
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                            child: Text(
-                              '${completedTasks.length}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onInverseSurface,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
                           ),
-                          const Spacer(),
-                          IconButton(
-                            icon: Icon(
-                              _showCompleted
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _showCompleted = !_showCompleted;
-                              });
-                            },
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (_showCompleted)
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) =>
-                            TaskItem(task: completedTasks[index]),
-                        childCount: completedTasks.length,
-                      ),
-                    ),
-                ],
-
-                // Bottom Padding
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
+                  ],
                 ),
-              ],
-            ],
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateToAddTask(context),
@@ -424,16 +560,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _navigateToAddTask(BuildContext context) async {
     final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => const AddTaskScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const AddTaskScreen()),
     );
-
-    if (result == true) {
-      // Task was added, refresh if needed
-      if (mounted) {
-        context.read<TaskProvider>().loadTasks();
-      }
+    if (result == true && mounted) {
+      context.read<TaskProvider>().loadTasks();
     }
   }
 }

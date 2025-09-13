@@ -265,60 +265,6 @@ class TaskItem extends StatelessWidget {
                             ],
                           ),
                         ],
-
-                        // Swipe hint for first few tasks or new users
-                        if (!task.isCompleted) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.swipe_right,
-                                size: 12,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .outline
-                                    .withOpacity(0.5),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Swipe to complete',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline
-                                          .withOpacity(0.5),
-                                      fontSize: 10,
-                                    ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                Icons.swipe_left,
-                                size: 12,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .outline
-                                    .withOpacity(0.5),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Swipe to delete',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline
-                                          .withOpacity(0.5),
-                                      fontSize: 10,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
                   ),

@@ -4,7 +4,6 @@ import '../providers/task_provider.dart';
 import '../widgets/task_item.dart';
 import '../widgets/progress_indicator.dart';
 import '../screens/add_task_screen.dart';
-import '../screens/edit_task_screen.dart';
 import '../models/task.dart';
 import '../screens/notification_settings_screen.dart';
 
@@ -44,9 +43,14 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
+          // Use all tasks for checking if we have any tasks in the database
+          final hasAnyTasksInDatabase = taskProvider.allTasks.isNotEmpty;
+
+          // Use filtered tasks for display
           final incompleteTasks = taskProvider.incompleteTasks;
           final completedTasks = taskProvider.completedTasks;
-          final hasAnyTasks = taskProvider.tasks.isNotEmpty;
+          final hasFilteredTasks =
+              incompleteTasks.isNotEmpty || completedTasks.isNotEmpty;
 
           return CustomScrollView(
             slivers: [
@@ -73,8 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     },
                   ),
-                  // Filter menu - only show if there are tasks
-                  if (hasAnyTasks)
+                  // Filter menu - only show if there are tasks in database
+                  if (hasAnyTasksInDatabase)
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.filter_list),
                       onSelected: (value) =>
@@ -106,20 +110,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
 
-              // Progress Indicator
-              if (hasAnyTasks)
+              // Progress Indicator - show when there are filtered tasks
+              if (hasFilteredTasks)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: TaskProgressIndicator(
-                      totalTasks: taskProvider.tasks.length,
+                      totalTasks:
+                          incompleteTasks.length + completedTasks.length,
                       completedTasks: completedTasks.length,
                     ),
                   ),
                 ),
 
-              // Search Bar
-              if (hasAnyTasks)
+              // Search Bar - show when there are ANY tasks in database
+              if (hasAnyTasksInDatabase)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -172,8 +177,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // Empty State
-              if (!hasAnyTasks)
+              // Empty State - show when no tasks in database at all
+              if (!hasAnyTasksInDatabase)
                 SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -211,8 +216,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // Task Lists
-              if (hasAnyTasks) ...[
+              // No Search Results State - show when search returns no results
+              if (hasAnyTasksInDatabase && !hasFilteredTasks)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 80,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'No tasks found',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          taskProvider.searchQuery != null
+                              ? 'Try a different search term'
+                              : 'Try adjusting your filters',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (taskProvider.searchQuery != null ||
+                            taskProvider.filterPriority != null ||
+                            taskProvider.filterCategory != null)
+                          TextButton.icon(
+                            onPressed: () {
+                              _searchController.clear();
+                              taskProvider.clearFilters();
+                            },
+                            icon: const Icon(Icons.clear_all),
+                            label: const Text('Clear Search & Filters'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Task Lists - show when there are filtered tasks
+              if (hasFilteredTasks) ...[
                 // Incomplete Tasks Section
                 if (incompleteTasks.isNotEmpty) ...[
                   SliverToBoxAdapter(

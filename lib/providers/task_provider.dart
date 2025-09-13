@@ -11,6 +11,10 @@ class TaskProvider extends ChangeNotifier {
   TaskPriority? _filterPriority;
   String? _filterCategory;
 
+  // NEW: Getter for raw tasks from database (unfiltered)
+  List<Task> get allTasks => List.from(_tasks);
+
+  // EXISTING: Getter for filtered tasks (used for display)
   List<Task> get tasks {
     List<Task> filteredTasks = List.from(_tasks);
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
@@ -18,20 +17,95 @@ class TaskItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Slidable(
-        key: ValueKey(task.id),
-        endActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (context) => _deleteTask(context),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-              icon: Icons.delete,
-              label: 'Delete',
-            ),
-          ],
+      child: Dismissible(
+        key: ValueKey(
+            '${task.id}_${task.isCompleted}'), // Include completion state in key
+        direction: DismissDirection.horizontal,
+
+        // Right swipe (start to end) - Toggle completion
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            // Toggle completion
+            _toggleCompletion(context);
+            return false; // Don't actually dismiss
+          } else if (direction == DismissDirection.endToStart) {
+            // Show delete confirmation
+            return await _showDeleteConfirmation(context);
+          }
+          return false;
+        },
+
+        onDismissed: (direction) {
+          if (direction == DismissDirection.endToStart) {
+            // Delete task
+            context.read<TaskProvider>().deleteTask(task.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Task deleted')),
+            );
+          }
+        },
+
+        // Background for swipe gestures
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: task.isCompleted
+                ? Theme.of(context).colorScheme.secondary
+                : Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                task.isCompleted ? Icons.undo : Icons.check,
+                color: task.isCompleted
+                    ? Theme.of(context).colorScheme.onSecondary
+                    : Theme.of(context).colorScheme.onPrimary,
+                size: 28,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                task.isCompleted ? 'Undo' : 'Done!',
+                style: TextStyle(
+                  color: task.isCompleted
+                      ? Theme.of(context).colorScheme.onSecondary
+                      : Theme.of(context).colorScheme.onPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
+
+        // Background for left swipe (delete)
+        secondaryBackground: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.error,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                'Delete',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onError,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.delete,
+                color: Theme.of(context).colorScheme.onError,
+                size: 28,
+              ),
+            ],
+          ),
+        ),
+
         child: Card(
           elevation: 0,
           color: task.isCompleted
@@ -62,8 +136,7 @@ class TaskItem extends StatelessWidget {
                 Expanded(
                   child: GestureDetector(
                     onTap: () => _editTask(context),
-                    behavior: HitTestBehavior
-                        .opaque, // This makes the entire area tappable
+                    behavior: HitTestBehavior.opaque,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -192,6 +265,60 @@ class TaskItem extends StatelessWidget {
                             ],
                           ),
                         ],
+
+                        // Swipe hint for first few tasks or new users
+                        if (!task.isCompleted) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.swipe_right,
+                                size: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withOpacity(0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Swipe to complete',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withOpacity(0.5),
+                                      fontSize: 10,
+                                    ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.swipe_left,
+                                size: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withOpacity(0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Swipe to delete',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withOpacity(0.5),
+                                      fontSize: 10,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -295,6 +422,43 @@ class TaskItem extends StatelessWidget {
 
   void _toggleCompletion(BuildContext context) {
     context.read<TaskProvider>().toggleTaskCompletion(task.id);
+
+    // Show feedback snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          task.isCompleted ? 'Task marked incomplete' : 'Task completed!',
+        ),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<bool> _showDeleteConfirmation(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Delete Task'),
+              content: Text('Are you sure you want to delete "${task.title}"?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   void _editTask(BuildContext context) async {
@@ -305,41 +469,9 @@ class TaskItem extends StatelessWidget {
     );
 
     if (result == true) {
-      // Task was updated, refresh if needed
       if (context.mounted) {
         context.read<TaskProvider>().loadTasks();
       }
     }
-  }
-
-  void _deleteTask(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete "${task.title}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.read<TaskProvider>().deleteTask(task.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Task deleted')),
-                );
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
   }
 }

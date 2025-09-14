@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../services/notification_service.dart';
+import '../services/notification_service_clean.dart' as clean_service;
 import '../services/device_compatibility_service.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
@@ -13,7 +13,7 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
-  bool _dailyReminderEnabled = false;
+  bool _notificationsEnabled = false;
   bool _isLoading = true;
 
   @override
@@ -40,8 +40,19 @@ class _NotificationSettingsScreenState
     setState(() => _isLoading = true);
 
     try {
-      final enabled = await NotificationService.isDailyReminderEnabled();
-      setState(() => _dailyReminderEnabled = enabled);
+      final notificationService = clean_service.NotificationService();
+      final dailyEnabled = await notificationService.isDailyReminderEnabled();
+      final morningEnabled = await notificationService.isMorningReminderEnabled();
+
+      // Debug: Check what's stored in SharedPreferences
+      debugPrint('🔍 Daily reminder status: $dailyEnabled');
+      debugPrint('🔍 Morning reminder status: $morningEnabled');
+      final status = await notificationService.getStatus();
+      debugPrint('🔍 Notification service status: $status');
+
+      setState(() {
+        _notificationsEnabled = dailyEnabled || morningEnabled;
+      });
     } catch (e) {
       debugPrint('Error loading settings: $e');
     } finally {
@@ -49,49 +60,59 @@ class _NotificationSettingsScreenState
     }
   }
 
-  Future<void> _toggleDailyReminder(bool value) async {
+  Future<void> _toggleNotifications(bool value) async {
     setState(() => _isLoading = true);
 
     try {
-      bool success;
+      final notificationService = clean_service.NotificationService();
+
       if (value) {
-        success = await NotificationService.enableDailyReminder();
-        if (success && mounted) {
+        // Enable both morning and evening reminders
+        final morningSuccess = await notificationService.enableMorningReminder();
+        final dailySuccess = await notificationService.enableDailyReminder();
+
+        debugPrint('🔍 Enable morning reminder result: $morningSuccess');
+        debugPrint('🔍 Enable daily reminder result: $dailySuccess');
+
+        final success = morningSuccess && dailySuccess;
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Daily reminder enabled! You\'ll get notified at 8 PM every day.'),
-              duration: Duration(seconds: 4),
+            SnackBar(
+              content: Text(success
+                ? '✅ Notifications enabled! You\'ll get reminders at 11 AM and 8 PM daily.'
+                : '❌ Failed to enable notifications. Check permissions.'),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
       } else {
-        success = await NotificationService.disableDailyReminder();
-        if (success && mounted) {
+        // Disable both reminders
+        final morningSuccess = await notificationService.disableMorningReminder();
+        final dailySuccess = await notificationService.disableDailyReminder();
+
+        debugPrint('🔍 Disable morning reminder result: $morningSuccess');
+        debugPrint('🔍 Disable daily reminder result: $dailySuccess');
+
+        final success = morningSuccess && dailySuccess;
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Daily reminder disabled'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(success
+                ? '❌ Notifications disabled'
+                : '❌ Failed to disable notifications'),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
       }
 
-      if (success) {
-        setState(() => _dailyReminderEnabled = value);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(value
-                ? 'Failed to enable daily reminder. Please check notification permissions.'
-                : 'Failed to disable daily reminder.'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-      }
+      // Always update the UI state - the service will handle permissions
+      setState(() => _notificationsEnabled = value);
+
     } catch (e) {
-      debugPrint('Error toggling daily reminder: $e');
+      debugPrint('Error toggling notifications: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -121,7 +142,7 @@ class _NotificationSettingsScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Main setting card
+          // Unified notification card
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -131,10 +152,10 @@ class _NotificationSettingsScreenState
                   Row(
                     children: [
                       Icon(
-                        _dailyReminderEnabled
+                        _notificationsEnabled
                             ? Icons.notifications_active
                             : Icons.notifications_off,
-                        color: _dailyReminderEnabled
+                        color: _notificationsEnabled
                             ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).colorScheme.outline,
                         size: 32,
@@ -145,13 +166,13 @@ class _NotificationSettingsScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Daily Task Reminder',
+                              'Task Reminders',
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             Text(
-                              '8:00 PM every day',
+                              '11:00 AM & 8:00 PM daily',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
@@ -160,22 +181,69 @@ class _NotificationSettingsScreenState
                         ),
                       ),
                       Switch(
-                        value: _dailyReminderEnabled,
-                        onChanged: _isLoading ? null : _toggleDailyReminder,
+                        value: _notificationsEnabled,
+                        onChanged: _isLoading ? null : _toggleNotifications,
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    _dailyReminderEnabled
-                        ? '✅ You\'ll receive a daily reminder at 8 PM to check your tasks'
+                    _notificationsEnabled
+                        ? '✅ You\'ll receive reminders at 11 AM and 8 PM daily to check your tasks'
                         : '⏰ Enable to get daily reminders to check your tasks',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: _dailyReminderEnabled
+                      color: _notificationsEnabled
                           ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (_notificationsEnabled) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.wb_sunny,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Morning: 11:00 AM',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.nights_stay,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Evening: 8:00 PM',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -183,46 +251,6 @@ class _NotificationSettingsScreenState
 
           const SizedBox(height: 16),
 
-          // Test notification button
-          Card(
-            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.science,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Test Notification',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Send a test notification to see how it looks',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.8),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _isLoading ? null : _sendTestNotification,
-                    icon: const Icon(Icons.send),
-                    label: const Text('Send Test'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
 
           // Status info
           Card(
@@ -248,18 +276,12 @@ class _NotificationSettingsScreenState
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    leading: const Icon(Icons.access_time),
-                    title: const Text('Reminder Time'),
-                    subtitle: const Text('8:00 PM daily'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  ListTile(
-                    leading: Icon(_dailyReminderEnabled ? Icons.check_circle : Icons.cancel),
-                    title: const Text('Status'),
-                    subtitle: Text(_dailyReminderEnabled ? 'Active' : 'Disabled'),
-                    iconColor: _dailyReminderEnabled
+                    leading: Icon(_notificationsEnabled ? Icons.notifications_active : Icons.notifications_off),
+                    title: const Text('Task Reminders'),
+                    subtitle: Text(_notificationsEnabled ? '11:00 AM & 8:00 PM - Active' : 'Disabled'),
+                    iconColor: _notificationsEnabled
                         ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.error,
+                        : Theme.of(context).colorScheme.outline,
                     contentPadding: EdgeInsets.zero,
                   ),
                 ],
@@ -269,55 +291,6 @@ class _NotificationSettingsScreenState
 
           const SizedBox(height: 16),
 
-          // Device-specific help
-          if (DeviceCompatibilityService.isProblematicDevice)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.warning_amber,
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Device Setup Required',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Your ${DeviceCompatibilityService.deviceType.toUpperCase()} device needs special settings for notifications to work reliably.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () {
-                        DeviceCompatibilityService.showDeviceSetupDialog(context);
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError,
-                      ),
-                      child: const Text('Show Setup Guide'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 16),
 
           // General help
           Card(
@@ -361,33 +334,4 @@ class _NotificationSettingsScreenState
     );
   }
 
-  Future<void> _sendTestNotification() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final success = await NotificationService.sendTestNotification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success
-                ? '🧪 Test notification sent! Check your notification panel.'
-                : '❌ Failed to send test notification. Check permissions.'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error sending test notification: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
 }

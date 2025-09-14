@@ -8,6 +8,8 @@ class DeviceCompatibilityService {
   static DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
   static String? _manufacturer;
   static String? _model;
+  static String? _androidVersion;
+  static int? _androidSdkInt;
   static bool _isInitialized = false;
 
   // Initialize device info
@@ -19,8 +21,10 @@ class DeviceCompatibilityService {
         AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
         _manufacturer = androidInfo.manufacturer.toLowerCase();
         _model = androidInfo.model;
+        _androidVersion = androidInfo.version.release;
+        _androidSdkInt = androidInfo.version.sdkInt;
         _isInitialized = true;
-        debugPrint('Device: $_manufacturer $_model');
+        debugPrint('Device: $_manufacturer $_model (Android $_androidVersion, SDK $_androidSdkInt)');
       } catch (e) {
         debugPrint('Error getting device info: $e');
       }
@@ -60,6 +64,19 @@ class DeviceCompatibilityService {
     return 'standard';
   }
 
+  // Check if device requires exact alarm permissions (Android 12+ / SDK 31+)
+  static bool get requiresExactAlarmPermission {
+    return _androidSdkInt != null && _androidSdkInt! >= 31;
+  }
+
+  // Get Android version info
+  static String get androidVersionInfo {
+    if (_androidVersion != null && _androidSdkInt != null) {
+      return 'Android $_androidVersion (SDK $_androidSdkInt)';
+    }
+    return 'Unknown Android version';
+  }
+
   // Get device-specific instructions
   static List<String> getDeviceSpecificInstructions() {
     switch (deviceType) {
@@ -73,6 +90,7 @@ class DeviceCompatibilityService {
           'Go to Settings > Battery > More battery settings',
           'Turn off "Optimize battery usage" for MinimaList',
           'Add MinimaList to "Protected apps" if available',
+          'IMPORTANT: On EMUI 12+ devices, grant "Schedule exact alarms" permission when prompted',
         ];
       case 'xiaomi':
         return [

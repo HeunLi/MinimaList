@@ -3,13 +3,17 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
-import '../models/task.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+
+  // Simple keys for settings
+  static const String _dailyReminderEnabledKey = 'daily_reminder_enabled';
+  static const int _dailyReminderNotificationId = 1001;
 
   // Initialize the notification service
   static Future<void> initialize() async {
@@ -33,25 +37,19 @@ class NotificationService {
         iOS: iosSettings,
       );
 
-      await _notifications.initialize(
-        initSettings,
-        onDidReceiveNotificationResponse: _onNotificationTapped,
-      );
-
-      await _createNotificationChannels();
+      await _notifications.initialize(initSettings);
+      await _createNotificationChannel();
       _initialized = true;
+
+      debugPrint('✅ Notification service initialized');
     } catch (e) {
+      debugPrint('❌ Error initializing notifications: $e');
       _initialized = false;
     }
   }
 
-  // Handle notification tap
-  static void _onNotificationTapped(NotificationResponse details) {
-    // TODO: Navigate to specific task or home screen
-  }
-
-  // Create notification channels
-  static Future<void> _createNotificationChannels() async {
+  // Create a simple notification channel
+  static Future<void> _createNotificationChannel() async {
     if (!Platform.isAndroid) return;
 
     final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
@@ -59,239 +57,127 @@ class NotificationService {
 
     if (androidPlugin == null) return;
 
-    const highPriorityChannel = AndroidNotificationChannel(
-      'task_reminders',
-      'Task Reminders',
-      description: 'Notifications for task due dates',
-      importance: Importance.max,
+    const channel = AndroidNotificationChannel(
+      'daily_reminders',
+      'Daily Task Reminders',
+      description: 'Daily reminders to check your tasks',
+      importance: Importance.high,
       playSound: true,
       enableVibration: true,
       enableLights: true,
       showBadge: true,
     );
 
-    const dailyChannel = AndroidNotificationChannel(
-      'daily_summary',
-      'Daily Summary',
-      description: 'Daily task summary notifications',
-      importance: Importance.defaultImportance,
-      playSound: true,
-      enableVibration: true,
-    );
-
-    await androidPlugin.createNotificationChannel(highPriorityChannel);
-    await androidPlugin.createNotificationChannel(dailyChannel);
+    await androidPlugin.createNotificationChannel(channel);
+    debugPrint('✅ Notification channel created');
   }
 
   // Request notification permissions
   static Future<bool> requestPermission() async {
     try {
-      // Request notification permission
       final status = await Permission.notification.request();
 
       if (status.isGranted && Platform.isAndroid) {
-        // Try to request exact alarm permission for scheduled notifications
+        // Try to get additional permissions but don't fail if they're not granted
         await Permission.scheduleExactAlarm.request();
-        // Try to request battery optimization exemption
         await Permission.ignoreBatteryOptimizations.request();
       }
 
+      debugPrint('📱 Notification permission: ${status.isGranted}');
       return status.isGranted;
     } catch (e) {
+      debugPrint('❌ Error requesting permissions: $e');
       return false;
     }
   }
 
-  // Check if notifications are enabled
-  static Future<bool> areNotificationsEnabled() async {
+  // Check if daily reminder is enabled
+  static Future<bool> isDailyReminderEnabled() async {
     try {
-      return await Permission.notification.isGranted;
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_dailyReminderEnabledKey) ?? false;
     } catch (e) {
+      debugPrint('❌ Error checking daily reminder status: $e');
       return false;
     }
   }
 
-  // Schedule notifications for a task
-  static Future<void> scheduleTaskNotifications(Task task) async {
-    if (!_initialized) await initialize();
-
-    if (task.dueDate == null) return;
-
-    // Check if notifications are enabled
-    final notificationsEnabled = await areNotificationsEnabled();
-    if (!notificationsEnabled) return;
-
-    // Cancel existing notifications for this task
-    await cancelTaskNotifications(task.id);
-
-    final now = DateTime.now();
-    final dueDate = task.dueDate!;
-
-    // Don't schedule notifications for past due dates
-    if (dueDate.isBefore(now)) return;
-
-    // Schedule notification 1 day before (if applicable)
-    final oneDayBefore = DateTime(
-      dueDate.year,
-      dueDate.month,
-      dueDate.day - 1,
-      9, // 9 AM
-    );
-
-    if (oneDayBefore.isAfter(now)) {
-      await _scheduleNotification(
-        id: _getDayBeforeNotificationId(task.id),
-        title: 'Task Due Tomorrow',
-        body: task.title,
-        scheduledDate: oneDayBefore,
-      );
-    }
-
-    // Schedule notification on due date morning
-    final dueDateMorning = DateTime(
-      dueDate.year,
-      dueDate.month,
-      dueDate.day,
-      9, // 9 AM
-    );
-
-    if (dueDateMorning.isAfter(now)) {
-      await _scheduleNotification(
-        id: _getDueDateNotificationId(task.id),
-        title: 'Task Due Today',
-        body: task.title,
-        scheduledDate: dueDateMorning,
-      );
-    }
-
-    // Schedule overdue notification
-    final overdueDate = DateTime(
-      dueDate.year,
-      dueDate.month,
-      dueDate.day + 1,
-      10, // 10 AM
-    );
-
-    await _scheduleNotification(
-      id: _getOverdueNotificationId(task.id),
-      title: 'Task Overdue',
-      body: '${task.title} was due yesterday',
-      scheduledDate: overdueDate,
-    );
-  }
-
-  // Core scheduling method
-  static Future<void> _scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
+  // Enable daily reminder at 8 PM
+  static Future<bool> enableDailyReminder() async {
     try {
-      const androidDetails = AndroidNotificationDetails(
-        'task_reminders',
-        'Task Reminders',
-        channelDescription: 'Notifications for task due dates',
-        importance: Importance.max,
-        priority: Priority.max,
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.reminder,
-        enableVibration: true,
-        playSound: true,
-      );
+      if (!_initialized) await initialize();
 
-      const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
-
-      // Try exact scheduling first, fall back to inexact if needed
-      AndroidScheduleMode scheduleMode =
-          AndroidScheduleMode.inexactAllowWhileIdle;
-
-      if (Platform.isAndroid) {
-        final exactAlarmGranted = await Permission.scheduleExactAlarm.isGranted;
-        if (exactAlarmGranted) {
-          scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
-        }
+      // Check permissions first
+      final hasPermission = await Permission.notification.isGranted;
+      if (!hasPermission) {
+        final granted = await requestPermission();
+        if (!granted) return false;
       }
 
-      await _notifications.zonedSchedule(
-        id,
-        title,
-        body,
-        tzScheduledDate,
-        details,
-        androidScheduleMode: scheduleMode,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
+      // Schedule the daily notification
+      await _scheduleDailyReminder();
+
+      // Save setting
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_dailyReminderEnabledKey, true);
+
+      debugPrint('✅ Daily reminder enabled for 8 PM');
+      return true;
     } catch (e) {
-      // Silently fail - notification might not be scheduled
+      debugPrint('❌ Error enabling daily reminder: $e');
+      return false;
     }
   }
 
-  // Show immediate notification
-  static Future<void> showInstantNotification({
-    required String title,
-    required String body,
-  }) async {
-    if (!_initialized) await initialize();
+  // Disable daily reminder
+  static Future<bool> disableDailyReminder() async {
+    try {
+      if (!_initialized) await initialize();
 
-    const androidDetails = AndroidNotificationDetails(
-      'instant_notifications',
-      'Instant Notifications',
-      channelDescription: 'Immediate notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
+      // Cancel the notification
+      await _notifications.cancel(_dailyReminderNotificationId);
 
-    const iosDetails = DarwinNotificationDetails();
+      // Save setting
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_dailyReminderEnabledKey, false);
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      details,
-    );
+      debugPrint('✅ Daily reminder disabled');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error disabling daily reminder: $e');
+      return false;
+    }
   }
 
-  // Schedule daily summary
-  static Future<void> scheduleDailySummary() async {
-    if (!_initialized) await initialize();
-
+  // Schedule the daily reminder at 8 PM
+  static Future<void> _scheduleDailyReminder() async {
     const androidDetails = AndroidNotificationDetails(
-      'daily_summary',
-      'Daily Summary',
-      channelDescription: 'Daily task summary',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
+      'daily_reminders',
+      'Daily Task Reminders',
+      channelDescription: 'Daily reminders to check your tasks',
+      importance: Importance.high,
+      priority: Priority.high,
+      enableVibration: true,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
     );
 
-    const iosDetails = DarwinNotificationDetails();
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
 
     const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
+    // Calculate next 8 PM
     final now = DateTime.now();
-    var scheduledDate = DateTime(now.year, now.month, now.day, 8);
+    var scheduledDate = DateTime(now.year, now.month, now.day, 20); // 8 PM
 
-    // If 8 AM has passed today, schedule for tomorrow
+    // If 8 PM has already passed today, schedule for tomorrow
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
@@ -299,59 +185,68 @@ class NotificationService {
     final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
 
     await _notifications.zonedSchedule(
-      999999, // Unique ID for daily summary
-      'Good Morning!',
-      'Check your tasks for today',
+      _dailyReminderNotificationId,
+      '📋 Task Check Time!',
+      'Time to review your tasks and plan ahead',
       scheduledTZ,
       details,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
+      matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
     );
+
+    debugPrint('⏰ Daily reminder scheduled for: $scheduledDate');
   }
 
-  // Cancel daily summary
-  static Future<void> cancelDailySummary() async {
-    if (!_initialized) await initialize();
-    await _notifications.cancel(999999);
+  // Send a test notification
+  static Future<bool> sendTestNotification() async {
+    try {
+      if (!_initialized) await initialize();
+
+      const androidDetails = AndroidNotificationDetails(
+        'daily_reminders',
+        'Daily Task Reminders',
+        channelDescription: 'Test notification',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      const iosDetails = DarwinNotificationDetails();
+
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _notifications.show(
+        999,
+        '🧪 Test Notification',
+        'This is how your daily reminder will look!',
+        details,
+      );
+
+      debugPrint('✅ Test notification sent');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error sending test notification: $e');
+      return false;
+    }
   }
 
-  // Cancel notifications for a task
-  static Future<void> cancelTaskNotifications(String taskId) async {
-    if (!_initialized) await initialize();
-
-    await _notifications.cancel(_getDayBeforeNotificationId(taskId));
-    await _notifications.cancel(_getDueDateNotificationId(taskId));
-    await _notifications.cancel(_getOverdueNotificationId(taskId));
-  }
-
-  // Cancel all notifications
-  static Future<void> cancelAllNotifications() async {
-    if (!_initialized) await initialize();
-    await _notifications.cancelAll();
-  }
-
-  // Get pending notifications (for debugging)
-  static Future<List<PendingNotificationRequest>>
-      getPendingNotifications() async {
-    if (!_initialized) await initialize();
-
-    final pending = await _notifications.pendingNotificationRequests();
-    debugPrint('Pending notifications: ${pending.length}');
-    return pending;
-  }
-
-  // Helper methods to generate unique notification IDs
-  static int _getDayBeforeNotificationId(String taskId) {
-    return (taskId.hashCode.abs() % 100000);
-  }
-
-  static int _getDueDateNotificationId(String taskId) {
-    return ((taskId.hashCode.abs() % 100000) + 100000);
-  }
-
-  static int _getOverdueNotificationId(String taskId) {
-    return ((taskId.hashCode.abs() % 100000) + 200000);
+  // Get simple status for debugging
+  static Future<Map<String, dynamic>> getStatus() async {
+    try {
+      return {
+        'initialized': _initialized,
+        'permission_granted': await Permission.notification.isGranted,
+        'daily_reminder_enabled': await isDailyReminderEnabled(),
+        'exact_alarm_permission': await Permission.scheduleExactAlarm.isGranted,
+        'battery_optimization_disabled': await Permission.ignoreBatteryOptimizations.isGranted,
+      };
+    } catch (e) {
+      return {'error': e.toString()};
+    }
   }
 }

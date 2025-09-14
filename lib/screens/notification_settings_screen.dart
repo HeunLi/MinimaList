@@ -61,7 +61,8 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _toggleNotifications(bool value) async {
-    setState(() => _isLoading = true);
+    // Update UI immediately for better UX
+    setState(() => _notificationsEnabled = value);
 
     try {
       final notificationService = clean_service.NotificationService();
@@ -86,6 +87,11 @@ class _NotificationSettingsScreenState
             ),
           );
         }
+
+        // Revert if failed
+        if (!success && mounted) {
+          setState(() => _notificationsEnabled = false);
+        }
       } else {
         // Disable both reminders
         final morningSuccess = await notificationService.disableMorningReminder();
@@ -106,14 +112,19 @@ class _NotificationSettingsScreenState
             ),
           );
         }
-      }
 
-      // Always update the UI state - the service will handle permissions
-      setState(() => _notificationsEnabled = value);
+        // Revert if failed
+        if (!success && mounted) {
+          setState(() => _notificationsEnabled = true);
+        }
+      }
 
     } catch (e) {
       debugPrint('Error toggling notifications: $e');
+
+      // Revert the UI state on error
       if (mounted) {
+        setState(() => _notificationsEnabled = !value);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
@@ -121,8 +132,6 @@ class _NotificationSettingsScreenState
           ),
         );
       }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -182,7 +191,7 @@ class _NotificationSettingsScreenState
                       ),
                       Switch(
                         value: _notificationsEnabled,
-                        onChanged: _isLoading ? null : _toggleNotifications,
+                        onChanged: _toggleNotifications,
                       ),
                     ],
                   ),

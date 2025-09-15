@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../providers/task_provider.dart';
 import '../models/tag.dart';
 import '../widgets/task_item.dart';
-import '../widgets/progress_indicator.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/floating_progress_widget.dart';
 import '../screens/add_task_screen.dart';
@@ -119,7 +118,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ],
                   ),
 
-
                   // Clear search button
                   if (_currentSearchValue.isNotEmpty)
                     SliverToBoxAdapter(
@@ -133,7 +131,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             icon: const Icon(Icons.clear, size: 18),
                             label: const Text('Clear search'),
                             style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.primary,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 6,
@@ -146,7 +145,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                   // Active Filters Display
                   if (taskProvider.filterPriority != null ||
-                      (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty))
+                      (taskProvider.filterTags != null &&
+                          taskProvider.filterTags!.isNotEmpty))
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -160,14 +160,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 onDeleted: () =>
                                     taskProvider.setPriorityFilter(null),
                               ),
-                            if (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty)
+                            if (taskProvider.filterTags != null &&
+                                taskProvider.filterTags!.isNotEmpty)
                               ...taskProvider.filterTags!.map((tagId) {
-                                final tag = taskProvider.tags.firstWhere((t) => t.id == tagId, orElse: () => Tag(id: tagId, name: 'Unknown', createdAt: DateTime.now()));
+                                final tag = taskProvider.tags.firstWhere(
+                                    (t) => t.id == tagId,
+                                    orElse: () => Tag(
+                                        id: tagId,
+                                        name: 'Unknown',
+                                        createdAt: DateTime.now()));
                                 return Chip(
                                   label: Text(tag.name),
                                   onDeleted: () {
-                                    final newTags = List<String>.from(taskProvider.filterTags!)..remove(tagId);
-                                    taskProvider.setTagFilter(newTags.isEmpty ? null : newTags);
+                                    final newTags = List<String>.from(
+                                        taskProvider.filterTags!)
+                                      ..remove(tagId);
+                                    taskProvider.setTagFilter(
+                                        newTags.isEmpty ? null : newTags);
                                   },
                                 );
                               }),
@@ -242,7 +251,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             const SizedBox(height: 16),
                             if (_currentSearchValue.isNotEmpty ||
                                 taskProvider.filterPriority != null ||
-                                (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty))
+                                (taskProvider.filterTags != null &&
+                                    taskProvider.filterTags!.isNotEmpty))
                               TextButton.icon(
                                 onPressed: () {
                                   _clearSearch();
@@ -390,9 +400,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           child: Consumer<TaskProvider>(
                             builder: (context, taskProvider, child) {
                               final availableTags = taskProvider.tags;
-                              final filteredTags = availableTags.where((tag) =>
-                                tag.name.toLowerCase().contains(_searchController.text.toLowerCase())
-                              ).toList();
+                              final filteredTags = availableTags
+                                  .where((tag) => tag.name
+                                      .toLowerCase()
+                                      .contains(
+                                          _searchController.text.toLowerCase()))
+                                  .toList();
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,7 +416,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     borderRadius: BorderRadius.circular(12),
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.surface,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
                                           color: Theme.of(context)
@@ -418,13 +433,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                             controller: _searchController,
                                             autofocus: _isSearching,
                                             decoration: InputDecoration(
-                                              hintText: 'Search tasks or tags...',
-                                              prefixIcon: const Icon(Icons.search),
+                                              hintText:
+                                                  'Search tasks or tags...',
+                                              prefixIcon:
+                                                  const Icon(Icons.search),
                                               suffixIcon: IconButton(
-                                                icon: Icon(
-                                                    _searchController.text.isNotEmpty
-                                                        ? Icons.clear
-                                                        : Icons.close),
+                                                icon: Icon(_searchController
+                                                        .text.isNotEmpty
+                                                    ? Icons.clear
+                                                    : Icons.close),
                                                 onPressed: () {
                                                   if (_searchController
                                                       .text.isNotEmpty) {
@@ -444,16 +461,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                               border: InputBorder.none,
                                               contentPadding:
                                                   const EdgeInsets.symmetric(
-                                                      horizontal: 16, vertical: 16),
+                                                      horizontal: 16,
+                                                      vertical: 16),
                                             ),
-                                            style:
-                                                Theme.of(context).textTheme.bodyLarge,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge,
                                             onChanged: (query) {
                                               _currentSearchValue = query;
                                               context
                                                   .read<TaskProvider>()
-                                                  .setSearchQuery(
-                                                      query.isEmpty ? null : query);
+                                                  .setSearchQuery(query.isEmpty
+                                                      ? null
+                                                      : query);
                                               setSearchState(
                                                   () {}); // Update suggestions
                                             },
@@ -464,16 +484,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   ),
 
                                   // Tag Suggestions
-                                  if (_searchController.text.isNotEmpty && filteredTags.isNotEmpty) ...[
+                                  if (_searchController.text.isNotEmpty &&
+                                      filteredTags.isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     Material(
                                       elevation: 4,
                                       borderRadius: BorderRadius.circular(12),
                                       child: Container(
-                                        constraints: const BoxConstraints(maxHeight: 200),
+                                        constraints: const BoxConstraints(
+                                            maxHeight: 200),
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.surface,
-                                          borderRadius: BorderRadius.circular(12),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surface,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           border: Border.all(
                                             color: Theme.of(context)
                                                 .colorScheme
@@ -482,7 +507,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                           ),
                                         ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Padding(
@@ -492,15 +518,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                   Icon(
                                                     Icons.local_offer,
                                                     size: 16,
-                                                    color: Theme.of(context).colorScheme.primary,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     'Filter by tags',
-                                                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                                      color: Theme.of(context).colorScheme.primary,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .primary,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
                                                   ),
                                                 ],
                                               ),
@@ -508,40 +543,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                             Flexible(
                                               child: ListView.builder(
                                                 shrinkWrap: true,
-                                                padding: const EdgeInsets.only(bottom: 8),
+                                                padding: const EdgeInsets.only(
+                                                    bottom: 8),
                                                 itemCount: filteredTags.length,
                                                 itemBuilder: (context, index) {
-                                                  final tag = filteredTags[index];
-                                                  final isSelected = taskProvider.filterTags?.contains(tag.id) ?? false;
+                                                  final tag =
+                                                      filteredTags[index];
+                                                  final isSelected =
+                                                      taskProvider.filterTags
+                                                              ?.contains(
+                                                                  tag.id) ??
+                                                          false;
 
                                                   return InkWell(
                                                     onTap: () {
-                                                      _selectTagFilter(tag, taskProvider);
+                                                      _selectTagFilter(
+                                                          tag, taskProvider);
                                                     },
                                                     child: Padding(
-                                                      padding: const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 8
-                                                      ),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 8),
                                                       child: Row(
                                                         children: [
                                                           Container(
-                                                            padding: const EdgeInsets.symmetric(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
                                                               horizontal: 8,
                                                               vertical: 4,
                                                             ),
-                                                            decoration: BoxDecoration(
-                                                              color: tag.color != null
-                                                                  ? Color(int.parse(tag.color!)).withOpacity(0.2)
-                                                                  : Theme.of(context)
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: tag.color !=
+                                                                      null
+                                                                  ? Color(int.parse(tag
+                                                                          .color!))
+                                                                      .withOpacity(
+                                                                          0.2)
+                                                                  : Theme.of(
+                                                                          context)
                                                                       .colorScheme
                                                                       .tertiaryContainer
-                                                                      .withOpacity(0.5),
-                                                              borderRadius: BorderRadius.circular(12),
-                                                              border: Border.all(
-                                                                color: tag.color != null
-                                                                    ? Color(int.parse(tag.color!))
-                                                                    : Theme.of(context)
+                                                                      .withOpacity(
+                                                                          0.5),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              border:
+                                                                  Border.all(
+                                                                color: tag.color !=
+                                                                        null
+                                                                    ? Color(int
+                                                                        .parse(tag
+                                                                            .color!))
+                                                                    : Theme.of(
+                                                                            context)
                                                                         .colorScheme
                                                                         .tertiary,
                                                                 width: 1,
@@ -549,25 +608,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                             ),
                                                             child: Text(
                                                               tag.name,
-                                                              style: Theme.of(context)
+                                                              style: Theme.of(
+                                                                      context)
                                                                   .textTheme
                                                                   .labelSmall
                                                                   ?.copyWith(
-                                                                    color: tag.color != null
-                                                                        ? Color(int.parse(tag.color!))
+                                                                    color: tag.color !=
+                                                                            null
+                                                                        ? Color(int.parse(tag
+                                                                            .color!))
                                                                         : Theme.of(context)
                                                                             .colorScheme
                                                                             .onTertiaryContainer,
-                                                                    fontWeight: FontWeight.w600,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
                                                                   ),
                                                             ),
                                                           ),
                                                           const Spacer(),
                                                           if (isSelected)
                                                             Icon(
-                                                              Icons.check_circle,
+                                                              Icons
+                                                                  .check_circle,
                                                               size: 18,
-                                                              color: Theme.of(context).colorScheme.primary,
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .colorScheme
+                                                                  .primary,
                                                             ),
                                                         ],
                                                       ),
@@ -609,7 +677,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
-
 
   void _selectTagFilter(Tag tag, TaskProvider taskProvider) {
     final currentFilters = taskProvider.filterTags ?? [];

@@ -21,13 +21,12 @@ class TaskProvider extends ChangeNotifier {
 
     // Apply search filter
     if (_searchQuery != null && _searchQuery!.isNotEmpty) {
+      final searchLower = _searchQuery!.toLowerCase();
       filteredTasks = filteredTasks
           .where((task) =>
-              task.title.toLowerCase().contains(_searchQuery!.toLowerCase()) ||
-              (task.description
-                      ?.toLowerCase()
-                      .contains(_searchQuery!.toLowerCase()) ??
-                  false))
+              task.title.toLowerCase().contains(searchLower) ||
+              (task.description?.toLowerCase().contains(searchLower) ?? false) ||
+              task.tags.any((tag) => tag.name.toLowerCase().contains(searchLower)))
           .toList();
     }
 

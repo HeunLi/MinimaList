@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class TaskProgressIndicator extends StatefulWidget {
   final int totalTasks;
   final int completedTasks;
+  final bool showBorder;
 
   const TaskProgressIndicator({
     super.key,
     required this.totalTasks,
     required this.completedTasks,
+    this.showBorder = true,
   });
 
   @override
@@ -70,7 +72,7 @@ class _TaskProgressIndicatorState extends State<TaskProgressIndicator>
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+      decoration: widget.showBorder ? BoxDecoration(
         color: isCompleted
             ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
             : Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
@@ -79,7 +81,7 @@ class _TaskProgressIndicatorState extends State<TaskProgressIndicator>
           color: Theme.of(context).colorScheme.primaryContainer,
           width: 1,
         ),
-      ),
+      ) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

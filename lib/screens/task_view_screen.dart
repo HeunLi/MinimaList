@@ -109,146 +109,151 @@ class TaskViewScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Due Date and Category Row
-            Row(
-              children: [
-                // Due Date
-                if (task.dueDate != null) ...[
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: _getDueDateColor(context).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _getDueDateColor(context).withOpacity(0.3),
+            // Due Date Section
+            if (task.dueDate != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _getDueDateColor(context).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _getDueDateColor(context).withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          size: 16,
+                          color: _getDueDateColor(context),
                         ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.schedule,
-                                size: 16,
+                        const SizedBox(width: 8),
+                        Text(
+                          'Due Date',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
                                 color: _getDueDateColor(context),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Due Date',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: _getDueDateColor(context),
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            DateFormat('EEEE, MMM d, yyyy')
-                                .format(task.dueDate!),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                          ),
-                          Text(
-                            _formatDueDateStatus(task.dueDate!),
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: _getDueDateColor(context),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-
-                // Spacing between due date and category
-                if (task.dueDate != null && task.category != null)
-                  const SizedBox(width: 12),
-
-                // Category
-                if (task.category != null) ...[
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .secondaryContainer
-                            .withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color:
-                              Theme.of(context).colorScheme.secondaryContainer,
                         ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.label,
-                                size: 16,
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      DateFormat('EEEE, MMM d, yyyy').format(task.dueDate!),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                    Text(
+                      _formatDueDateStatus(task.dueDate!),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: _getDueDateColor(context),
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (task.dueDate != null && task.tags.isNotEmpty)
+              const SizedBox(height: 20),
+
+            // Tags Section
+            if (task.tags.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .tertiaryContainer
+                      .withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.local_offer,
+                          size: 16,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onTertiaryContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Tags',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
                                 color: Theme.of(context)
                                     .colorScheme
-                                    .onSecondaryContainer,
+                                    .onTertiaryContainer,
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Category',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSecondaryContainer,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .secondaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              task.category!,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSecondaryContainer,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ],
-            ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: task.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: tag.color != null
+                                ? Color(int.parse(tag.color!)).withOpacity(0.2)
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .tertiaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: tag.color != null
+                                  ? Color(int.parse(tag.color!))
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .tertiary,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            tag.name,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: tag.color != null
+                                      ? Color(int.parse(tag.color!))
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onTertiaryContainer,
+                                ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
 
             const SizedBox(height: 20),
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/task_provider.dart';
 import '../models/task.dart';
+import '../models/tag.dart';
 
 class EditTaskScreen extends StatefulWidget {
   final Task task;
@@ -20,10 +21,11 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _categoryController;
+  final _tagController = TextEditingController();
 
   DateTime? _selectedDueDate;
   TaskPriority _selectedPriority = TaskPriority.medium;
+  List<Tag> _selectedTags = [];
   bool _isLoading = false;
   bool _hasChanges = false;
 
@@ -33,23 +35,21 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _titleController = TextEditingController(text: widget.task.title);
     _descriptionController =
         TextEditingController(text: widget.task.description ?? '');
-    _categoryController =
-        TextEditingController(text: widget.task.category ?? '');
     _selectedDueDate = widget.task.dueDate;
     _selectedPriority = widget.task.priority;
+    _selectedTags = List.from(widget.task.tags);
 
     // Add listeners to detect changes
     _titleController.addListener(_onFormChanged);
     _descriptionController.addListener(_onFormChanged);
-    _categoryController.addListener(_onFormChanged);
   }
 
   void _onFormChanged() {
     final hasChanges = _titleController.text.trim() != widget.task.title ||
         _descriptionController.text.trim() != (widget.task.description ?? '') ||
-        _categoryController.text.trim() != (widget.task.category ?? '') ||
         _selectedDueDate != widget.task.dueDate ||
-        _selectedPriority != widget.task.priority;
+        _selectedPriority != widget.task.priority ||
+        !_areTagsEqual(_selectedTags, widget.task.tags);
 
     if (hasChanges != _hasChanges) {
       setState(() {
@@ -58,11 +58,19 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     }
   }
 
+  bool _areTagsEqual(List<Tag> tags1, List<Tag> tags2) {
+    if (tags1.length != tags2.length) return false;
+    for (int i = 0; i < tags1.length; i++) {
+      if (tags1[i].id != tags2[i].id) return false;
+    }
+    return true;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _categoryController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -360,42 +368,57 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
               const SizedBox(height: 16),
 
-              // Category Field
+              // Tags Section
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
-                    color:
-                        Theme.of(context).colorScheme.outline.withOpacity(0.4),
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.4),
                   ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Consumer<TaskProvider>(
                     builder: (context, taskProvider, child) {
-                      final existingCategories = taskProvider.categories;
-
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.local_offer),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Tags',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Tag input field
                           TextFormField(
-                            controller: _categoryController,
+                            controller: _tagController,
                             decoration: const InputDecoration(
-                              labelText: 'Category (optional)',
-                              hintText: 'e.g., Work, Personal, Shopping',
-                              border: InputBorder.none,
-                              prefixIcon: Icon(Icons.label),
+                              hintText: 'Add a tag and press Enter',
+                              border: OutlineInputBorder(),
+                              isDense: true,
                             ),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                            textCapitalization: TextCapitalization.words,
+                            onFieldSubmitted: _addTag,
+                            textInputAction: TextInputAction.done,
                           ),
 
-                          // Existing Categories
-                          if (existingCategories.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                          const SizedBox(height: 12),
+
+                          // Selected tags
+                          if (_selectedTags.isNotEmpty) ...[
                             Text(
-                              'Existing categories:',
+                              'Selected tags:',
                               style: Theme.of(context)
                                   .textTheme
                                   .labelMedium
@@ -409,16 +432,46 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                             Wrap(
                               spacing: 8,
                               runSpacing: 4,
-                              children: existingCategories.map((category) {
+                              children: _selectedTags.map((tag) {
+                                return Chip(
+                                  label: Text(tag.name),
+                                  backgroundColor: tag.color != null
+                                      ? Color(int.parse(tag.color!))
+                                      : Theme.of(context).colorScheme.secondaryContainer,
+                                  onDeleted: () => _removeTag(tag),
+                                  deleteIcon: const Icon(Icons.close, size: 18),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // Available tags
+                          if (taskProvider.tags.isNotEmpty) ...[
+                            Text(
+                              'Available tags:',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: taskProvider.tags
+                                  .where((tag) => !_selectedTags.any((selected) => selected.id == tag.id))
+                                  .map((tag) {
                                 return ActionChip(
-                                  label: Text(category),
-                                  onPressed: () {
-                                    _categoryController.text = category;
-                                    _onFormChanged();
-                                  },
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer,
+                                  label: Text(tag.name),
+                                  backgroundColor: tag.color != null
+                                      ? Color(int.parse(tag.color!))
+                                      : Theme.of(context).colorScheme.secondaryContainer,
+                                  onPressed: () => _selectTag(tag),
                                 );
                               }).toList(),
                             ),
@@ -582,9 +635,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             : _descriptionController.text.trim(),
         dueDate: _selectedDueDate,
         priority: _selectedPriority,
-        category: _categoryController.text.trim().isEmpty
-            ? null
-            : _categoryController.text.trim(),
+        tags: _selectedTags,
       );
 
       await taskProvider.updateTask(updatedTask);
@@ -616,5 +667,44 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         });
       }
     }
+  }
+
+  void _addTag(String tagName) async {
+    if (tagName.trim().isEmpty) return;
+
+    final taskProvider = context.read<TaskProvider>();
+    try {
+      final tag = await taskProvider.getOrCreateTag(tagName.trim());
+      if (tag != null && !_selectedTags.any((selected) => selected.id == tag.id)) {
+        setState(() {
+          _selectedTags.add(tag);
+          _tagController.clear();
+        });
+        _onFormChanged();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding tag: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _selectTag(Tag tag) {
+    setState(() {
+      _selectedTags.add(tag);
+    });
+    _onFormChanged();
+  }
+
+  void _removeTag(Tag tag) {
+    setState(() {
+      _selectedTags.removeWhere((selected) => selected.id == tag.id);
+    });
+    _onFormChanged();
   }
 }

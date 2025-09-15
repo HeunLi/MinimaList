@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/task_provider.dart';
 import '../models/task.dart';
+import '../models/tag.dart';
 
 class AddTaskScreen extends StatefulWidget {
   const AddTaskScreen({super.key});
@@ -15,17 +16,18 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _categoryController = TextEditingController();
+  final _tagController = TextEditingController();
 
   DateTime? _selectedDueDate;
   TaskPriority _selectedPriority = TaskPriority.medium;
+  List<Tag> _selectedTags = [];
   bool _isLoading = false;
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _categoryController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -244,7 +246,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
             const SizedBox(height: 16),
 
-            // Category Field
+            // Tags Section
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -257,28 +259,44 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Consumer<TaskProvider>(
                   builder: (context, taskProvider, child) {
-                    final existingCategories = taskProvider.categories;
-
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.local_offer),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Tags',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Tag input field
                         TextFormField(
-                          controller: _categoryController,
+                          controller: _tagController,
                           decoration: const InputDecoration(
-                            labelText: 'Category (optional)',
-                            hintText: 'e.g., Work, Personal, Shopping',
-                            border: InputBorder.none,
-                            prefixIcon: Icon(Icons.label),
+                            hintText: 'Add a tag and press Enter',
+                            border: OutlineInputBorder(),
+                            isDense: true,
                           ),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          textCapitalization: TextCapitalization.words,
+                          onFieldSubmitted: _addTag,
+                          textInputAction: TextInputAction.done,
                         ),
 
-                        // Existing Categories
-                        if (existingCategories.isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                        const SizedBox(height: 12),
+
+                        // Selected tags
+                        if (_selectedTags.isNotEmpty) ...[
                           Text(
-                            'Existing categories:',
+                            'Selected tags:',
                             style: Theme.of(context)
                                 .textTheme
                                 .labelMedium
@@ -292,15 +310,46 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
-                            children: existingCategories.map((category) {
+                            children: _selectedTags.map((tag) {
+                              return Chip(
+                                label: Text(tag.name),
+                                backgroundColor: tag.color != null
+                                    ? Color(int.parse(tag.color!))
+                                    : Theme.of(context).colorScheme.secondaryContainer,
+                                onDeleted: () => _removeTag(tag),
+                                deleteIcon: const Icon(Icons.close, size: 18),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        // Existing tags
+                        if (taskProvider.tags.isNotEmpty) ...[
+                          Text(
+                            'Available tags:',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: taskProvider.tags
+                                .where((tag) => !_selectedTags.any((selected) => selected.id == tag.id))
+                                .map((tag) {
                               return ActionChip(
-                                label: Text(category),
-                                onPressed: () {
-                                  _categoryController.text = category;
-                                },
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .secondaryContainer,
+                                label: Text(tag.name),
+                                backgroundColor: tag.color != null
+                                    ? Color(int.parse(tag.color!))
+                                    : Theme.of(context).colorScheme.secondaryContainer,
+                                onPressed: () => _selectTag(tag),
                               );
                             }).toList(),
                           ),
@@ -381,9 +430,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             : _descriptionController.text.trim(),
         dueDate: _selectedDueDate,
         priority: _selectedPriority,
-        category: _categoryController.text.trim().isEmpty
-            ? null
-            : _categoryController.text.trim(),
+        tags: _selectedTags,
       );
 
       if (mounted) {
@@ -413,5 +460,41 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         });
       }
     }
+  }
+
+  void _addTag(String tagName) async {
+    if (tagName.trim().isEmpty) return;
+
+    final taskProvider = context.read<TaskProvider>();
+    try {
+      final tag = await taskProvider.getOrCreateTag(tagName.trim());
+      if (tag != null && !_selectedTags.any((selected) => selected.id == tag.id)) {
+        setState(() {
+          _selectedTags.add(tag);
+          _tagController.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding tag: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _selectTag(Tag tag) {
+    setState(() {
+      _selectedTags.add(tag);
+    });
+  }
+
+  void _removeTag(Tag tag) {
+    setState(() {
+      _selectedTags.removeWhere((selected) => selected.id == tag.id);
+    });
   }
 }

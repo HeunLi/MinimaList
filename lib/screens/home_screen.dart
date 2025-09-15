@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/task_provider.dart';
+import '../models/tag.dart';
 import '../widgets/task_item.dart';
 import '../widgets/progress_indicator.dart';
 import '../widgets/app_drawer.dart';
@@ -186,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                   // Active Filters Display
                   if (taskProvider.filterPriority != null ||
-                      taskProvider.filterCategory != null)
+                      (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty))
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -200,12 +201,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 onDeleted: () =>
                                     taskProvider.setPriorityFilter(null),
                               ),
-                            if (taskProvider.filterCategory != null)
-                              Chip(
-                                label: Text(taskProvider.filterCategory!),
-                                onDeleted: () =>
-                                    taskProvider.setCategoryFilter(null),
-                              ),
+                            if (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty)
+                              ...taskProvider.filterTags!.map((tagId) {
+                                final tag = taskProvider.tags.firstWhere((t) => t.id == tagId, orElse: () => Tag(id: tagId, name: 'Unknown', createdAt: DateTime.now()));
+                                return Chip(
+                                  label: Text(tag.name),
+                                  onDeleted: () {
+                                    final newTags = List<String>.from(taskProvider.filterTags!)..remove(tagId);
+                                    taskProvider.setTagFilter(newTags.isEmpty ? null : newTags);
+                                  },
+                                );
+                              }),
                           ],
                         ),
                       ),
@@ -277,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             const SizedBox(height: 16),
                             if (_currentSearchValue.isNotEmpty ||
                                 taskProvider.filterPriority != null ||
-                                taskProvider.filterCategory != null)
+                                (taskProvider.filterTags != null && taskProvider.filterTags!.isNotEmpty))
                               TextButton.icon(
                                 onPressed: () {
                                   _clearSearch();

@@ -1,3 +1,5 @@
+import 'tag.dart';
+
 class Task {
   final String id;
   final String title;
@@ -6,7 +8,7 @@ class Task {
   final DateTime createdAt;
   final DateTime? dueDate;
   final TaskPriority priority;
-  final String? category;
+  final List<Tag> tags;
 
   const Task({
     required this.id,
@@ -16,7 +18,7 @@ class Task {
     required this.createdAt,
     this.dueDate,
     this.priority = TaskPriority.medium,
-    this.category,
+    this.tags = const [],
   });
 
   Task copyWith({
@@ -27,7 +29,7 @@ class Task {
     DateTime? createdAt,
     DateTime? dueDate,
     TaskPriority? priority,
-    String? category,
+    List<Tag>? tags,
   }) {
     return Task(
       id: id ?? this.id,
@@ -37,7 +39,7 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       dueDate: dueDate ?? this.dueDate,
       priority: priority ?? this.priority,
-      category: category ?? this.category,
+      tags: tags ?? this.tags,
     );
   }
 
@@ -50,11 +52,10 @@ class Task {
       'createdAt': createdAt.millisecondsSinceEpoch,
       'dueDate': dueDate?.millisecondsSinceEpoch,
       'priority': priority.index,
-      'category': category,
     };
   }
 
-  factory Task.fromMap(Map<String, dynamic> map) {
+  factory Task.fromMap(Map<String, dynamic> map, {List<Tag>? tags}) {
     return Task(
       id: map['id'],
       title: map['title'],
@@ -65,7 +66,7 @@ class Task {
           ? DateTime.fromMillisecondsSinceEpoch(map['dueDate'])
           : null,
       priority: TaskPriority.values[map['priority'] ?? 1],
-      category: map['category'],
+      tags: tags ?? [],
     );
   }
 

@@ -254,7 +254,7 @@ class AppDrawer extends StatelessWidget {
                 Consumer<TaskProvider>(
                   builder: (context, taskProvider, child) {
                     if (taskProvider.filterPriority == null &&
-                        taskProvider.filterCategory == null) {
+                        (taskProvider.filterTags == null || taskProvider.filterTags!.isEmpty)) {
                       return const SizedBox.shrink();
                     }
 

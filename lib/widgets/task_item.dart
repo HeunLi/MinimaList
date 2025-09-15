@@ -198,70 +198,78 @@ class TaskItem extends StatelessWidget {
                         ],
 
                         // Meta Information
-                        if (task.dueDate != null || task.category != null) ...[
+                        if (task.dueDate != null || task.tags.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               // Due Date
-                              if (task.dueDate != null) ...[
-                                Icon(
-                                  Icons.schedule,
-                                  size: 14,
-                                  color: _getDueDateColor(context),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatDueDate(task.dueDate!),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: _getDueDateColor(context),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
-
-                              // Category
-                              if (task.category != null) ...[
-                                if (task.dueDate != null) ...[
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    width: 4,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Theme.of(context).colorScheme.outline,
-                                      shape: BoxShape.circle,
+                              if (task.dueDate != null)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.schedule,
+                                      size: 14,
+                                      color: _getDueDateColor(context),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                ],
-                                Container(
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatDueDate(task.dueDate!),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: _getDueDateColor(context),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+
+                              // Tags
+                              ...task.tags.map((tag) {
+                                return Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
+                                    horizontal: 6,
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer,
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: tag.color != null
+                                        ? Color(int.parse(tag.color!))
+                                            .withOpacity(0.3)
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .tertiaryContainer,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: tag.color != null
+                                          ? Color(int.parse(tag.color!))
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .tertiary,
+                                      width: 0.5,
+                                    ),
                                   ),
                                   child: Text(
-                                    task.category!,
+                                    tag.name,
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelSmall
                                         ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onPrimaryContainer,
+                                          color: tag.color != null
+                                              ? Color(int.parse(tag.color!))
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .onTertiaryContainer,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w500,
                                         ),
                                   ),
-                                ),
-                              ],
+                                );
+                              }),
                             ],
                           ),
                         ],

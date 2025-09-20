@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
-import '../providers/task_provider.dart';
-import '../models/task.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -30,17 +28,23 @@ class AppDrawer extends StatelessWidget {
                   children: [
                     Text(
                       'MinimaList',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w300,
-                        letterSpacing: 1.2,
-                      ),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                                fontWeight: FontWeight.w300,
+                                letterSpacing: 1.2,
+                              ),
                     ),
                     Text(
                       'Settings & Options',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                      ),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer
+                                .withValues(alpha: 0.7),
+                          ),
                     ),
                   ],
                 ),
@@ -132,8 +136,6 @@ class AppDrawer extends StatelessWidget {
                     );
                   },
                 ),
-
-
               ],
             ),
           ),
@@ -146,17 +148,17 @@ class AppDrawer extends StatelessWidget {
                 Text(
                   'MinimaList v1.0.0',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'by Jebi',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: 12,
-                  ),
+                        color: Theme.of(context).colorScheme.outline,
+                        fontSize: 12,
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],

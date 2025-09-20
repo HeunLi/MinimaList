@@ -81,7 +81,6 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // Note: Individual task notifications removed - now using simple daily reminders
 
   Future<void> addTask({
     required String title,

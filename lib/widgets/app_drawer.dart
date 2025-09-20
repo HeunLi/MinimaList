@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/task_provider.dart';
-import '../screens/notification_settings_screen.dart';
 import '../models/task.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -227,23 +226,6 @@ class AppDrawer extends StatelessWidget {
                               : null,
                         ),
                       ],
-                    );
-                  },
-                ),
-
-                const Divider(),
-
-                // Notification Settings
-                ListTile(
-                  leading: const Icon(Icons.notifications_outlined),
-                  title: const Text('Notification Settings'),
-                  subtitle: const Text('Manage your task reminders'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const NotificationSettingsScreen(),
-                      ),
                     );
                   },
                 ),

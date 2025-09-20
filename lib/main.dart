@@ -1,32 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
-import 'services/notification_service_clean.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initNotifications();
   runApp(const TodoApp());
-}
-
-Future<void> initNotifications() async {
-  try {
-    NotificationService notificationService = NotificationService();
-    await notificationService.init();
-
-    if (Platform.isIOS) {
-      await notificationService.requestIOSPermissions();
-    } else {
-      await notificationService.requestAndroidPermission();
-    }
-
-    debugPrint('✅ Notifications initialized successfully');
-  } catch (e) {
-    debugPrint('❌ Error initializing notifications: $e');
-  }
 }
 
 class TodoApp extends StatelessWidget {

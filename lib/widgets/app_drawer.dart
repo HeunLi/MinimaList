@@ -133,132 +133,7 @@ class AppDrawer extends StatelessWidget {
                   },
                 ),
 
-                // Filter Section
-                Consumer<TaskProvider>(
-                  builder: (context, taskProvider, child) {
-                    if (taskProvider.allTasks.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
 
-                    return ExpansionTile(
-                      leading: const Icon(Icons.filter_list),
-                      title: const Text('Filter Tasks'),
-                      subtitle: Text(
-                        taskProvider.filterPriority != null
-                            ? '${taskProvider.filterPriority!.displayName} Priority'
-                            : 'All Tasks',
-                      ),
-                      children: [
-                        ListTile(
-                          leading: Icon(
-                            Icons.all_inbox,
-                            color: taskProvider.filterPriority == null
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          title: const Text('All Tasks'),
-                          onTap: () {
-                            taskProvider.clearFilters();
-                            Navigator.of(context).pop();
-                          },
-                          trailing: taskProvider.filterPriority == null
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
-                        ),
-                        ListTile(
-                          leading: Icon(
-                            Icons.priority_high,
-                            color: taskProvider.filterPriority == TaskPriority.high
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          title: const Text('High Priority'),
-                          onTap: () {
-                            taskProvider.setPriorityFilter(TaskPriority.high);
-                            Navigator.of(context).pop();
-                          },
-                          trailing: taskProvider.filterPriority == TaskPriority.high
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
-                        ),
-                        ListTile(
-                          leading: Icon(
-                            Icons.remove,
-                            color: taskProvider.filterPriority == TaskPriority.medium
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          title: const Text('Medium Priority'),
-                          onTap: () {
-                            taskProvider.setPriorityFilter(TaskPriority.medium);
-                            Navigator.of(context).pop();
-                          },
-                          trailing: taskProvider.filterPriority == TaskPriority.medium
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
-                        ),
-                        ListTile(
-                          leading: Icon(
-                            Icons.low_priority,
-                            color: taskProvider.filterPriority == TaskPriority.low
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          title: const Text('Low Priority'),
-                          onTap: () {
-                            taskProvider.setPriorityFilter(TaskPriority.low);
-                            Navigator.of(context).pop();
-                          },
-                          trailing: taskProvider.filterPriority == TaskPriority.low
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                const Divider(),
-
-                // Clear Filters (if any active)
-                Consumer<TaskProvider>(
-                  builder: (context, taskProvider, child) {
-                    if (taskProvider.filterPriority == null &&
-                        (taskProvider.filterTags == null || taskProvider.filterTags!.isEmpty)) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return ListTile(
-                      leading: Icon(
-                        Icons.clear_all,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      title: Text(
-                        'Clear All Filters',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                      subtitle: const Text('Remove all active filters'),
-                      onTap: () {
-                        taskProvider.clearFilters();
-                        Navigator.of(context).pop();
-                      },
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -266,12 +141,25 @@ class AppDrawer extends StatelessWidget {
           // App version info
           Container(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              'MinimaList v1.0.0',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              textAlign: TextAlign.center,
+            child: Column(
+              children: [
+                Text(
+                  'MinimaList v1.0.0',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'by Jebi',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ],
